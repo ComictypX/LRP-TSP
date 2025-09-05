@@ -1,6 +1,7 @@
 import itertools
 import os
 import re
+import sys
 from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
@@ -603,6 +604,7 @@ def main():
     parser.add_argument("--fancy-prompt", action="store_true", help="Interaktive Auswahl mit Checkbox (requires questionary)")
     parser.add_argument("--speed-kmh", type=float, default=170.0, help="Geschwindigkeit für Zeitabschätzung (km/h, default 170)")
     parser.add_argument("--minimal", action="store_true", help="Reduzierte Farben und dezente Ausgabe")
+    parser.add_argument("--pause", action="store_true", help="Fenster am Ende offen halten (für .exe/Explorer-Start)")
     args, _ = parser.parse_known_args()
 
     console = Console()
@@ -633,12 +635,28 @@ def main():
     else:
         console.print("[yellow]No coordinates found in frozen JSON. You may enter them manually.[/yellow]")
     # Ask for base coordinates early if a saved configuration exists.
-    # Load previously saved base coordinates and map from a config file
-    config_path = os.path.join(script_dir, ".tsp_config")
-    saved_base = None
-    if os.path.exists(config_path):
+    # Load previously saved base coordinates and map from a user config file.
+    # Prefer user config dir (APPDATA/XDG), fallback auf Legacy-Datei neben dem Script.
+    def _user_config_path():
         try:
-            with open(config_path, "r", encoding="utf-8") as f:
+            if os.name == "nt":
+                base = os.getenv("APPDATA") or os.path.expanduser("~")
+                cfgdir = os.path.join(base, "TSP-Dune")
+            else:
+                base = os.getenv("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+                cfgdir = os.path.join(base, "tsp-dune")
+            os.makedirs(cfgdir, exist_ok=True)
+            return os.path.join(cfgdir, ".tsp_config")
+        except Exception:
+            # Fallback: im Script-Verzeichnis (kann bei .exe temporär sein)
+            return os.path.join(script_dir, ".tsp_config")
+    user_config_path = _user_config_path()
+    legacy_config_path = os.path.join(script_dir, ".tsp_config")
+    saved_base = None
+    read_path = user_config_path if os.path.exists(user_config_path) else (legacy_config_path if os.path.exists(legacy_config_path) else None)
+    if read_path:
+        try:
+            with open(read_path, "r", encoding="utf-8") as f:
                 line = f.readline().strip()
             parts = line.split(",")
             if len(parts) == 3:
@@ -694,7 +712,7 @@ def main():
     # change has occurred.
     if not use_saved_base:
         # Only prompt to save if there is no saved base or the coordinates differ
-        config_path = os.path.join(script_dir, ".tsp_config")
+        config_path = user_config_path
         old = None
         if os.path.exists(config_path):
             try:
@@ -1145,6 +1163,14 @@ def main():
     summary.add_row("[bold]ETA[/bold]", f"[magenta]{hh}h {mm}m[/magenta] @ {args.speed_kmh:.0f} km/h")
     summary.add_row("[bold]Solver[/bold]", alg)
     console.print(Panel(summary, title="Summary", border_style="green", expand=False))
+
+    # On packaged .exe (PyInstaller) started via Explorer (no extra args),
+    # keep the window open unless user disables it. Also allow explicit --pause.
+    try:
+        if args.pause or (getattr(sys, "frozen", False) and len(sys.argv) <= 1):
+            input("Press Enter to exit…")
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":
