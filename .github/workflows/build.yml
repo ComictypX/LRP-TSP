@@ -6,6 +6,9 @@ on:
     tags: [ 'v*' ]
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -34,14 +37,6 @@ jobs:
             tsp_solver.py
           Get-ChildItem dist
 
-      - name: Build Extract-Dune.exe (optional)
-        if: ${{ hashFiles('extract_coords.py') != '' }}
-        shell: pwsh
-        run: |
-          pyinstaller --onefile --name Extract-Dune `
-            --add-data "data\world_data.json;data" `
-            extract_coords.py
-          Get-ChildItem dist
 
       - name: Upload artifact TSP-Dune
         uses: actions/upload-artifact@v4
@@ -49,12 +44,6 @@ jobs:
           name: TSP-Dune-windows
           path: dist/TSP-Dune.exe
 
-      - name: Upload artifact Extract-Dune
-        if: ${{ hashFiles('extract_coords.py') != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: Extract-Dune-windows
-          path: dist/Extract-Dune.exe
 
       - name: Create GitHub Release (on tag)
         if: startsWith(github.ref, 'refs/tags/')
@@ -62,6 +51,5 @@ jobs:
         with:
           files: |
             dist/TSP-Dune.exe
-            dist/Extract-Dune.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
