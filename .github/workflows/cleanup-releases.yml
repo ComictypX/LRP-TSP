@@ -1,0 +1,91 @@
+name: Cleanup Releases
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Aktion: 'mark' setzt Releases auf prerelease, 'delete' löscht sie"
+        required: true
+        default: mark
+        type: choice
+        options:
+          - mark
+          - delete
+      keepLatest:
+        description: "So viele neueste Releases unverändert lassen"
+        required: true
+        default: '1'
+      filter:
+        description: "Optionaler Filter (Substring) für Tag-Namen"
+        required: false
+      deleteTags:
+        description: "Beim Löschen auch die zugehörigen Git-Tags entfernen (nur bei mode=delete)"
+        required: true
+        default: 'false'
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cleanup releases via GitHub API
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const mode = core.getInput('mode') || 'mark';
+            const keepLatest = parseInt(core.getInput('keepLatest') || '1', 10);
+            const filter = core.getInput('filter') || '';
+            const deleteTags = (core.getInput('deleteTags') || 'false').toLowerCase() === 'true';
+
+            const all = await github.paginate(github.rest.repos.listReleases, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+
+            let releases = all;
+            if (filter) {
+              releases = releases.filter(r => (r.tag_name || '').includes(filter));
+            }
+
+            releases.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            const target = releases.slice(keepLatest);
+
+            core.info(`Found ${all.length} releases, filtered=${releases.length}, operating on ${target.length}. mode=${mode}`);
+
+            for (const r of target) {
+              if (mode === 'mark') {
+                if (!r.prerelease) {
+                  await github.rest.repos.updateRelease({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    release_id: r.id,
+                    prerelease: true,
+                  });
+                  core.info(`Marked ${r.tag_name} as prerelease.`);
+                } else {
+                  core.info(`Skip ${r.tag_name} (already prerelease).`);
+                }
+              } else if (mode === 'delete') {
+                await github.rest.repos.deleteRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: r.id,
+                });
+                core.info(`Deleted release ${r.tag_name}.`);
+                if (deleteTags && r.tag_name) {
+                  try {
+                    await github.rest.git.deleteRef({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      ref: `tags/${r.tag_name}`,
+                    });
+                    core.info(`Deleted tag ${r.tag_name}.`);
+                  } catch (err) {
+                    core.warning(`Failed to delete tag ${r.tag_name}: ${err.message}`);
+                  }
+                }
+              }
+            }
