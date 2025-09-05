@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tsp-dune"
+version = "0.1.0"
+description = "Route- und TSP-Planer für Dune: Awakening (Häuser)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "", email = "" }]
+keywords = ["dune", "tsp", "routing", "cli"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Environment :: Console",
+]
+
+dependencies = [
+  "rich>=13.0.0",
+  "questionary>=2.0.0",
+]
+
+[project.optional-dependencies]
+ortools = ["ortools>=9.9.0"]
+
+[project.scripts]
+tsp-dune = "tsp_solver:main"
+
+[tool.setuptools]
+# Single-module Projekt (tsp_solver.py im Root)
+py-modules = ["tsp_solver", "extract_coords"]

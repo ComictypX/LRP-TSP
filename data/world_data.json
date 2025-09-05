@@ -1,0 +1,147 @@
+{
+  "houses": {
+    "alexin": {
+      "map": "harko",
+      "x": 9981,
+      "y": 11532
+    },
+    "argosaz": {
+      "map": "hagga",
+      "x": 20712,
+      "y": 225882
+    },
+    "dyvetz": {
+      "map": "hagga",
+      "x": 260395,
+      "y": -2541
+    },
+    "ecaz": {
+      "map": "hagga",
+      "x": 306154,
+      "y": -30677
+    },
+    "hagal": {
+      "map": "hagga",
+      "x": -107198,
+      "y": -228884
+    },
+    "hurata": {
+      "map": "hagga",
+      "x": 320153,
+      "y": 77064
+    },
+    "imota": {
+      "map": "hagga",
+      "x": 216722,
+      "y": -283170
+    },
+    "kenola": {
+      "map": "hagga",
+      "x": -316767,
+      "y": -229449
+    },
+    "lindaren": {
+      "map": "hagga",
+      "x": -271053,
+      "y": -425183
+    },
+    "maros": {
+      "map": "deep",
+      "x": 693699,
+      "y": 866212
+    },
+    "mikarrol": {
+      "map": "hagga",
+      "x": 95584,
+      "y": -175300
+    },
+    "moritani": {
+      "map": "hagga",
+      "x": 278986,
+      "y": 11350
+    },
+    "mutelli": {
+      "map": "arrakeen",
+      "x": 3622,
+      "y": -3222
+    },
+    "novebruns": {
+      "map": "hagga",
+      "x": -17641,
+      "y": -20655
+    },
+    "richese": {
+      "map": "hagga",
+      "x": -41959,
+      "y": -229565
+    },
+    "sor": {
+      "map": "hagga",
+      "x": -32588,
+      "y": -312767
+    },
+    "spinnette": {
+      "map": "harko",
+      "x": 3197,
+      "y": 9387
+    },
+    "taligari": {
+      "map": "hagga",
+      "x": -219648,
+      "y": -163671
+    },
+    "thorvald": {
+      "map": "hagga",
+      "x": -107211,
+      "y": -228924
+    },
+    "tseida": {
+      "map": "hagga",
+      "x": 193284,
+      "y": 3843
+    },
+    "varota": {
+      "map": "arrakeen",
+      "x": -8729,
+      "y": -8010
+    },
+    "vernius": {
+      "map": "hagga",
+      "x": -51670,
+      "y": -234470
+    },
+    "wallach": {
+      "map": "arrakeen",
+      "x": -27131,
+      "y": 2796
+    },
+    "wayku": {
+      "map": "deep",
+      "x": -755998,
+      "y": 906987
+    },
+    "wydras": {
+      "map": "hagga",
+      "x": -315868,
+      "y": 39346
+    }
+  },
+  "exits": {
+    "arrakeen": [
+      [
+        14181,
+        -989
+      ]
+    ],
+    "harko": [
+      [
+        153,
+        31145
+      ],
+      [
+        9624,
+        -1067
+      ]
+    ]
+  }
+}

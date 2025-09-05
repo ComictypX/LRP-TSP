@@ -1,0 +1,10 @@
+# Include runtime data JSON
+include data/world_data.json
+
+# Exclude local/derived files from sdist
+exclude *.raw
+exclude coords.txt
+exclude test_coords.csv
+exclude .tsp_config
+recursive-exclude __pycache__ *
+recursive-exclude .venv *

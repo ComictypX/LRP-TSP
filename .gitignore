@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.env
+
+# Editor/OS
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Project specific
+*.raw
+.tsp_config
+coords.txt
+test_coords.csv
