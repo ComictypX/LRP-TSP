@@ -29,10 +29,20 @@ jobs:
           if (Test-Path requirements.txt) { pip install -r requirements.txt }
           pip install pyinstaller
 
+      - name: Download and setup UPX
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-win64.zip" -OutFile "upx.zip"
+          Expand-Archive -Path "upx.zip" -DestinationPath "upx"
+          $upxPath = Get-ChildItem -Path "upx" -Recurse -Filter "upx.exe" | Select-Object -First 1 -ExpandProperty FullName
+          Write-Host "UPX path: $upxPath"
+
       - name: Build TSP-Dune.exe
         shell: pwsh
         run: |
+          $upxDir = Get-ChildItem -Path "upx" -Recurse -Directory | Where-Object { $_.Name -like "*upx*" } | Select-Object -First 1 -ExpandProperty FullName
           pyinstaller --onefile --name TSP-Dune `
+            --upx-dir "$upxDir" `
             --add-data "data\world_data.json;data" `
             tsp_solver.py
           Get-ChildItem dist
