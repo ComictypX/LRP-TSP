@@ -36,6 +36,11 @@ Oder mit Batch-Skript:
 ### Standalone-EXE
 Lade die neueste EXE von [GitHub Releases](https://github.com/ComictypX/TSP-Dune/releases) herunter (z. B. `TSP-Dune.exe`). Keine Installation nötig – einfach ausführen.
 
+Hinweis: Es gibt jetzt Multi‑OS‑Builds in den Releases. Suche im Release-Asset nach:
+- `TSP-Dune-windows-latest` (Windows .exe)
+- `TSP-Dune-linux-latest` (Linux tar.gz)
+- `TSP-Dune-macos-latest` (macOS tar.gz)
+
 ## Nutzung
 
 ### Grundlegende Nutzung
@@ -97,6 +102,11 @@ Beiträge sind willkommen! Bitte:
 Für Bugs/Features: [GitHub Issues](https://github.com/ComictypX/TSP-Dune/issues).
 
 ## FAQ
+
+**Q: Wo finde ich die Koordinaten meiner Basis?**  
+A: Öffne die Karte deines Gebiets im Spiel und suche deine Basis. Die Koordinaten (x, y) werden angezeigt.  
+- [Hagga Basin](https://duneawakening.th.gl/maps/Hagga%20Basin)  
+- [The Deep Desert](https://duneawakening.th.gl/maps/The%20Deep%20Desert)
 
 **Q: Warum ist die EXE so groß?**  
 A: PyInstaller bündelt Python + Abhängigkeiten. UPX-Kompression reduziert es auf ~20-30 MB.
