@@ -259,7 +259,51 @@ def get_user_input_coords(default_coords, skip_base=False, console=None, fancy=F
             coordinates.append((x_val, y_val))
     # ask for base coordinates unless skipping
     base = None
+    base_map = None
     if not skip_base:
+        # First, ask for the base map to show relevant links
+        if fancy:
+            try:
+                import importlib
+                questionary = importlib.import_module("questionary")
+                base_map_choice = questionary.select(
+                    "Wo ist deine Basis?",
+                    choices=[
+                        {"name": "Hagga Basin", "value": "hagga"},
+                        {"name": "Deep Desert", "value": "deep"},
+                        {"name": "Anderes/Weiß nicht", "value": "other"}
+                    ]
+                ).ask()
+                base_map = base_map_choice
+            except Exception:
+                base_map = None
+        if base_map is None:
+            base_map_input = input("Wo ist deine Basis? (hagga/deep/other): ").strip().lower()
+            if base_map_input in ["hagga", "deep"]:
+                base_map = base_map_input
+            else:
+                base_map = "other"
+        
+        # Show relevant links based on base map
+        if console is not None:
+            console.print("[dim]Hinweis: Koordinaten deiner Basis findest du in der Karte deines Gebiets.[/dim]")
+            if base_map == "hagga":
+                console.print("[dim]  - Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin[/dim]")
+            elif base_map == "deep":
+                console.print("[dim]  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert[/dim]")
+            else:
+                console.print("[dim]  - Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin[/dim]")
+                console.print("[dim]  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert[/dim]")
+        else:
+            print("Hinweis: Koordinaten deiner Basis findest du in der Karte deines Gebiets.")
+            if base_map == "hagga":
+                print("  - Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin")
+            elif base_map == "deep":
+                print("  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert")
+            else:
+                print("  - Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin")
+                print("  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert")
+        
         base_x = parse_number("Enter your base X‑coordinate: ")
         base_y = parse_number("Enter your base Y‑coordinate: ")
         base = (base_x, base_y)
