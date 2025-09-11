@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "Aktion: 'mark' setzt Releases auf prerelease, 'delete' löscht sie"
+        description: "Action: 'mark' sets releases to prerelease, 'delete' removes them"
         required: true
         default: mark
         type: choice
@@ -12,14 +12,15 @@ on:
           - mark
           - delete
       keepLatest:
-        description: "So viele neueste Releases unverändert lassen"
+      
+        description: "How many latest releases to keep unchanged"
         required: true
         default: '1'
       filter:
-        description: "Optionaler Filter (Substring) für Tag-Namen"
+        description: "Optional filter (substring) for tag names"
         required: false
       deleteTags:
-        description: "Beim Löschen auch die zugehörigen Git-Tags entfernen (nur bei mode=delete)"
+        description: "When deleting, also remove the corresponding Git tags (only for mode=delete)"
         required: true
         default: 'false'
 

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tsp-dune"
 version = "0.1.0"
-description = "Route- und TSP-Planer für Dune: Awakening (Häuser)"
+description = "Route and TSP planner for Dune: Awakening (Landsraad houses)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
@@ -29,5 +29,5 @@ ortools = ["ortools>=9.9.0"]
 tsp-dune = "tsp_solver:main"
 
 [tool.setuptools]
-# Single-module Projekt (tsp_solver.py im Root)
+# Single-module project (tsp_solver.py in repository root)
 py-modules = ["tsp_solver", "extract_coords"]

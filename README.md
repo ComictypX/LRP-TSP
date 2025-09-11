@@ -1,76 +1,73 @@
 # TSP-Dune
 
-Ein schneller Routenplaner (TSP - Traveling Salesman Problem) für das Spiel **Dune: Awakening**. Berechnet optimale Besuchsreihenfolgen für Häuser auf den Karten (Hagga, Deep Desert, Arrakeen, Harko) mit knappen, farbkodierten Anweisungen. Verwendet eine gefrorene Datenbasis (`data/world_data.json`) für bekannte Häuser und Exits.
+A fast route planner (TSP - Traveling Salesman Problem) for **Dune: Awakening**. It computes efficient visit orders for houses across maps (Hagga, Deep Desert, Arrakeen, Harko) and prints concise, color-coded instructions. Runtime uses a frozen data file (`data/world_data.json`) with known houses and exits.
 
 ## Features
 
-- **Schnelle Routenberechnung**: Greedy-Algorithmus oder optional OR-Tools für exakte Lösungen.
-- **Semantic Coloring**: Farbkodierung nach Karte (Hagga=türkis, Deep Desert=sand-gold, Arrakeen=grün, Harko=rot).
-- **Kompakte Anweisungen**: Besuchszeilen mit klickbaren Links, kurze Koordinaten; Übergänge in einer Zeile.
-- **Interaktive Prompts**: Frage nach Basis-Haus und Zielen (mit Rich-UI).
-- **Optionale Extras**: ASCII-Karte, Fortschrittsbalken, ETA-Schätzung (standard 170 km/h).
-- **EXE-Build**: Standalone-EXE für Windows (via PyInstaller + UPX-Kompression).
-- **Konfigurierbar**: Flags für Minimal-Modus, Solver-Zwang, etc.
+- Fast routing: greedy heuristic, optional OR-Tools solver for higher quality.
+- Semantic coloring: map-based colors (Hagga=turquoise, Deep Desert=sand-gold, Arrakeen=green, Harko=red).
+- Compact instructions: visit lines with clickable links; transitions in one line.
+- Interactive prompts: select base and targets (Rich UI, optional).
+- Optional extras: ASCII map, progress bar, ETA estimate (default 170 km/h).
+- Windows EXE build (PyInstaller + UPX compression).
+- Configurable flags (minimal mode, force solver, etc.).
 
 ## Installation
 
-### Voraussetzungen
-- Python 3.10+ (für Windows-EXE: keine Python-Installation nötig).
-- Optional: OR-Tools für bessere Routen (`pip install ortools`).
+### Requirements
+- Python 3.10+ (Windows EXE requires no Python install).
+- Optional: OR-Tools for improved routing (`pip install ortools`).
 
-### Python-Installation
+### Python install
 ```powershell
-# Optional: Virtuelles Environment
+# Optional virtual environment
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
-# Abhängigkeiten installieren
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-Oder mit Batch-Skript:
+Or via batch script:
 ```powershell
 ./setup.bat
 ```
 
-### Standalone-EXE
-Lade die neueste EXE von [GitHub Releases](https://github.com/ComictypX/TSP-Dune/releases) herunter (z. B. `TSP-Dune.exe`). Keine Installation nötig – einfach ausführen.
+### Standalone downloads (Multi-OS)
+Grab the latest prerelease from [GitHub Releases](https://github.com/ComictypX/TSP-Dune/releases):
+- Windows: `TSP-Dune.exe`
+- Linux: `TSP-Dune-linux.tar.gz`
+- macOS: `TSP-Dune-macos.tar.gz`
 
-Hinweis: Es gibt jetzt Multi‑OS‑Builds in den Releases. Suche im Release-Asset nach:
-- `TSP-Dune-windows-latest` (Windows .exe)
-- `TSP-Dune-linux-latest` (Linux tar.gz)
-- `TSP-Dune-macos-latest` (macOS tar.gz)
+## Usage
 
-## Nutzung
-
-### Grundlegende Nutzung
+### Basic
 ```powershell
-# Python-Version starten
+# Run with Python
 python tsp_solver.py
 
-# Mit Optionen
+# With options
 python tsp_solver.py --ascii-map --progress --speed-kmh 200 --minimal
 ```
 
-Oder mit EXE:
+Or with the EXE (Windows):
 ```powershell
 TSP-Dune.exe --ascii-map --progress
 ```
 
-### Flags und Optionen
-- `--minimal`: Reduziert Farben und Schmuck für einfachere Ausgabe.
-- `--force-ortools`: Erzwingt OR-Tools-Solver (falls installiert), sonst Greedy-Fallback.
-- `--ascii-map`: Zeigt eine ASCII-Karte der Route.
-- `--progress`: Fortschrittsbalken während Berechnung.
-- `--speed-kmh <km/h>`: ETA-Schätzung (Standard: 170 km/h).
-- `--pause`: Hält Konsole offen nach Ausführung (nützlich für EXE).
-- `--help`: Zeigt alle Optionen.
+### Flags
+- `--minimal`: reduce colors/decorations.
+- `--force-ortools`: force OR-Tools if installed; otherwise greedy is used.
+- `--ascii-map`: draw an ASCII map of points.
+- `--progress`: show a progress bar during processing.
+- `--speed-kmh <km/h>`: ETA estimate (default: 170 km/h).
+- `--pause`: keep console open after finishing (handy for EXE).
+- `--help`: show all options.
 
-### Beispiel-Ausgabe
+### Example output
 ```
-TSP-Dune v0.1.2 - Routenplaner für Dune: Awakening
+TSP-Dune v0.1.x - Route planner for Dune: Awakening
 
-Besuche diese Häuser in dieser Reihenfolge:
 Visit Harkonnen (12, 34) [🔗 dune.gaming.tools/harkonnen]
 Leave Harko and travel to Arrakeen (right entrance).
 Visit Atreides (56, 78) [🔗 dune.gaming.tools/atreides]
@@ -79,62 +76,57 @@ Distance: 123.4 km | ETA: 0.7 h @ 170 km/h
 Solver: Greedy
 ```
 
-## Datenquelle und Anpassung
+## Data source and customization
 
-- **Laufzeit-Daten**: Ausschließlich `data/world_data.json` (enthält Häuser, Koordinaten, Exits).
-- **Keine .raw-Dateien im Repo**: Diese werden nicht versioniert/veröffentlicht.
-- **Eigene Daten erzeugen**: Wenn du .raw-Dateien hast (z. B. von Dune-Spiel), kannst du die JSON selbst erstellen:
+- Runtime data: `data/world_data.json` (houses, coords, exits) only.
+- No `.raw` files in this repo. If you have your own `.raw` files you can regenerate JSON:
 
 ```powershell
 python extract_coords.py --mode aggregated --freeze
 ```
 
-Das aktualisiert `data/world_data.json` mit Overrides (z. B. Thorvald in Hagga).
+This updates `data/world_data.json` (with overrides like Thorvald in Hagga).
 
 ## Contributing
 
-Beiträge sind willkommen! Bitte:
-- Forke das Repo und erstelle einen Feature-Branch.
-- Füge Tests hinzu (siehe `tests/`).
-- Halte dich an den Code-Style (Black/Flake8).
-- Öffne einen Pull Request mit Beschreibung.
+Contributions are welcome:
+- Fork the repo and create a feature branch.
+- Add tests (see `tests/`).
+- Follow code style (Black/Flake8).
+- Open a Pull Request with a description.
 
-Für Bugs/Features: [GitHub Issues](https://github.com/ComictypX/TSP-Dune/issues).
+Issues/Feature requests: [GitHub Issues](https://github.com/ComictypX/TSP-Dune/issues).
 
 ## FAQ
 
-**Q: Wo finde ich die Koordinaten meiner Basis?**  
-A: Öffne die Karte deines Gebiets im Spiel und suche deine Basis. Die Koordinaten (x, y) werden angezeigt.  
-- [Hagga Basin](https://duneawakening.th.gl/maps/Hagga%20Basin)  
-- [The Deep Desert](https://duneawakening.th.gl/maps/The%20Deep%20Desert)
+**Where can I find my base coordinates?**  
+Use the map of your region in-game.  
+- Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin  
+- Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert
 
-**Q: Warum ist die EXE so groß?**  
-A: PyInstaller bündelt Python + Abhängigkeiten. UPX-Kompression reduziert es auf ~20-30 MB.
+**Why is the EXE large?**  
+PyInstaller bundles Python + deps. UPX compression lowers size to ~20–30 MB.
 
-**Q: Funktioniert es ohne OR-Tools?**  
-A: Ja, Greedy-Algorithmus als Fallback.
+**Does it work without OR-Tools?**  
+Yes. The greedy heuristic is the fallback.
 
-**Q: Wie aktualisiere ich die Haus-Daten?**  
-A: Bearbeite `data/world_data.json` oder verwende `extract_coords.py` mit eigenen .raw-Dateien.
+**How do I update house data?**  
+Edit `data/world_data.json` or run `extract_coords.py` with your own `.raw` files.
 
-**Q: Lizenz?**  
-A: MIT (siehe LICENSE). Daten aus Dune: Awakening – keine Garantie für Aktualität.
+**License?**  
+MIT (see LICENSE). Data from Dune: Awakening — no guarantee for completeness.
 
 ## Credits
 
-- **Dune: Awakening**: Spiel von Funcom.
-- **OR-Tools**: Von Google für Routing.
-- **Rich**: Für schöne Konsolen-UI.
-- **PyInstaller**: Für EXE-Build.
+- Dune: Awakening — Funcom.
+- OR-Tools — Google.
+- Rich — Console UI.
+- PyInstaller — EXE build.
 
 ## Changelog
 
-- **v0.1.2**: UX-Verbesserungen, Pause-Modus, Config-Persistenz.
-- **v0.1.1**: Prerelease-Setup, UPX-Kompression.
-- **v0.1.0**: Initial Release mit Basis-Features.
-
-Vollständiges Changelog: [CHANGELOG.md](CHANGELOG.md)
+See [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
-Entwickelt mit ❤️ für Dune-Fans. Feedback? [GitHub Discussions](https://github.com/ComictypX/TSP-Dune/discussions).
+Made with ❤️ for Dune fans. Feedback? [GitHub Discussions](https://github.com/ComictypX/TSP-Dune/discussions).

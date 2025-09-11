@@ -1,36 +1,36 @@
 # Changelog
 
-Alle signifikanten Änderungen am Projekt werden hier dokumentiert.
+All notable changes to this project will be documented in this file.
 
-Die Konvention folgt weitgehend Keep a Changelog: https://keepachangelog.com/de/0.3.0/de/
+The format roughly follows Keep a Changelog: https://keepachangelog.com/en/1.1.0/
 
 ## [Unreleased]
-- Vorbereitung auf Multi-OS-Builds (CI) und automatische Prerelease-Erstellung bei Tags.
-- README: Hinweise zu Multi-OS-Downloads ergänzt.
+- CI: Prepare multi-OS builds and automatic prerelease creation on tags.
+- Docs: Mention multi-OS downloads in README.
 
 ## [v0.1.3] - 2025-09-10
-### Geändert
-- CI: Multi‑OS Matrix-Build für Windows, Linux und macOS hinzugefügt.
-- CI: Automatische Erstellung eines Prerelease bei Tag-Push (Release sammelt Artefakte aller Plattformen).
-- CI: UPX-Download/Integration für Windows-Builds zur Reduzierung der EXE-Größe.
-- README: Hinweise zu Multi‑OS-Assets und Release‑Assets ergänzt.
-- UX: Basis-Abfrage verbessert (Frage nach Karte vor Koordinateneingabe). 
+### Changed
+- CI: Added multi-OS matrix build for Windows, Linux, and macOS.
+- CI: Automatic prerelease creation on tag push (collect all platform artifacts).
+- CI: UPX download/integration for Windows builds to reduce EXE size.
+- Docs: Added notes about multi-OS assets and release artifacts in README.
+- UX: Improved base prompt (ask for map before coordinates).
 
 ## [v0.1.2]
-### Geändert
-- UX: Pause-Modus (`--pause`) hinzugefügt, damit EXE-Fenster offen bleibt.
-- Persistenz: Basis-Konfiguration wird nun in Benutzerkonfigurationsverzeichnis gespeichert.
-- Standard-ETA auf 170 km/h gesetzt.
-- CI: Release-Prerelease-Flag standardisiert.
+### Changed
+- UX: Added `--pause` to keep the EXE window open after finishing.
+- Persistence: Base configuration is now stored in the user's config directory.
+- Defaults: ETA speed set to 170 km/h.
+- CI: Standardized prerelease flag on releases.
 
 ## [v0.1.1]
-### Geändert
-- CI: Workflow bereinigt, Release-Berechtigungen (`contents: write`) gesetzt, Initiales Prerelease-Verhalten eingeführt.
-- Build: UPX-Kompression als optionale Optimierung (später in v0.1.3 vollständig integriert).
+### Changed
+- CI: Cleaned up workflow, set release permissions (`contents: write`), introduced initial prerelease behavior.
+- Build: Optional UPX compression (later fully integrated in v0.1.3).
 
 ## [v0.1.0] - Initial Release
-- Erstveröffentlichung mit Basissolver, Rich-UI, `data/world_data.json` als Laufzeit-Datenquelle.
+- First release with base solver, Rich UI, and `data/world_data.json` as runtime data source.
 
 ---
 
-Hinweis: Wenn du möchtest, kann ich das Changelog automatisch aus Commit-Messages oder Tags generieren (z. B. mit `github-changelog-generator` oder einem GitHub Action Schritt). Sag mir, ob ich das ebenfalls einrichte.
+Note: We can generate release notes automatically from commits/tags (e.g., via a GitHub Action). Let me know if you want that added.

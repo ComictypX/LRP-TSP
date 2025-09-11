@@ -9,7 +9,7 @@ from rich.panel import Panel
 from rich.columns import Columns
 from rich.progress import Progress
 
-# Korrekturen für spezielle Haus-Slugs auf dune.gaming.tools
+# Overrides for special house slugs on dune.gaming.tools
 SLUG_OVERRIDES = {
     "spinnette": "spinette",
     "mikarrol": "mikkarol",
@@ -76,11 +76,11 @@ def compute_cross_distance(p1, map1, p2, map2, exits):
         )
         cost_to_enter = vertical_cost + horiz_cost
     elif map2 == "hagga":
-        # Choose best side to spawn as close as possible to target
+        # Choose the closest border to enter Hagga as close as possible to target
         cost_to_enter = min_dist_to_bounds(p2, bounds2)
     else:
-        # Arrakeen/Harko: single entry; Weg im Hub i. d. R. klein -> optional 0
-        # Falls du innerhalb des Hubs Distanz zählen willst:
+        # Arrakeen/Harko: single entry; intra-hub distance is negligible -> treat as 0
+        # If you want to count hub-internal distance instead, you could do:
         #   ex = exits.get(f"{map2}_exit_coords"); cost_to_enter = compute_distance(ex[0], p2)
         cost_to_enter = 0.0
 
@@ -261,46 +261,49 @@ def get_user_input_coords(default_coords, skip_base=False, console=None, fancy=F
     base = None
     base_map = None
     if not skip_base:
-        # First, ask for the base map to show relevant links
+        # First, ask for the base map to show relevant links (only Hagga or Deep Desert)
         if fancy:
             try:
                 import importlib
                 questionary = importlib.import_module("questionary")
                 base_map_choice = questionary.select(
-                    "Wo ist deine Basis?",
+                    "Where is your base?",
                     choices=[
                         {"name": "Hagga Basin", "value": "hagga"},
-                        {"name": "Deep Desert", "value": "deep"},
-                        {"name": "Anderes/Weiß nicht", "value": "other"}
+                        {"name": "Deep Desert", "value": "deep"}
                     ]
                 ).ask()
                 base_map = base_map_choice
             except Exception:
                 base_map = None
         if base_map is None:
-            base_map_input = input("Wo ist deine Basis? (hagga/deep/other): ").strip().lower()
-            if base_map_input in ["hagga", "deep"]:
-                base_map = base_map_input
-            else:
-                base_map = "other"
+            # enforce a valid answer
+            while True:
+                base_map_input = input("Where is your base? (hagga/deep): ").strip().lower()
+                if base_map_input in ["hagga", "deep"]:
+                    base_map = base_map_input
+                    break
+                print("Please enter 'hagga' or 'deep'.")
         
         # Show relevant links based on base map
         if console is not None:
-            console.print("[dim]Hinweis: Koordinaten deiner Basis findest du in der Karte deines Gebiets.[/dim]")
+            console.print("[dim]Tip: You can find your base coordinates on the map of your region.[/dim]")
             if base_map == "hagga":
                 console.print("[dim]  - Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin[/dim]")
             elif base_map == "deep":
                 console.print("[dim]  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert[/dim]")
             else:
+                # fallback: show both links if something unexpected occurs
                 console.print("[dim]  - Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin[/dim]")
                 console.print("[dim]  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert[/dim]")
         else:
-            print("Hinweis: Koordinaten deiner Basis findest du in der Karte deines Gebiets.")
+            print("Tip: You can find your base coordinates on the map of your region.")
             if base_map == "hagga":
                 print("  - Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin")
             elif base_map == "deep":
                 print("  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert")
             else:
+                # fallback: show both links if something unexpected occurs
                 print("  - Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin")
                 print("  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert")
         
@@ -573,21 +576,21 @@ def prompt_user_for_points():
 
 
 def solve_route_with_ortools(base, base_map, points, exits, time_limit_s=5):
-    """Löst die Route mit OR-Tools (ATSP), nutzt compute_cross_distance als Kosten."""
+    """Solve the route with OR-Tools (ATSP), using compute_cross_distance as cost."""
     try:
         import importlib
         cs = importlib.import_module("ortools.constraint_solver")
         pywrapcp = cs.pywrapcp
         routing_enums_pb2 = cs.routing_enums_pb2
     except Exception as e:
-        raise ImportError("OR-Tools nicht installiert") from e
+        raise ImportError("OR-Tools is not installed") from e
 
     names = ["Base"] + [p[0] for p in points]
     coords = [base] + [p[1] for p in points]
     maps = [base_map] + [p[2] for p in points]
     n = len(names)
 
-    # Vorberechnete Kostenmatrix (int64)
+    # Precomputed cost matrix (int64)
     dist = [[0] * n for _ in range(n)]
     for i in range(n):
         for j in range(n):
@@ -597,7 +600,7 @@ def solve_route_with_ortools(base, base_map, points, exits, time_limit_s=5):
                 c = compute_cross_distance(coords[i], maps[i], coords[j], maps[j], exits)
                 dist[i][j] = int(round(c))
 
-    manager = pywrapcp.RoutingIndexManager(n, 1, 0)  # 1 Fahrzeug, Depot=0 (Base)
+    manager = pywrapcp.RoutingIndexManager(n, 1, 0)  # 1 vehicle, depot=0 (Base)
     routing = pywrapcp.RoutingModel(manager)
 
     def transit_cb(from_index, to_index):
@@ -615,7 +618,7 @@ def solve_route_with_ortools(base, base_map, points, exits, time_limit_s=5):
 
     solution = routing.SolveWithParameters(params)
     if not solution:
-        raise RuntimeError("OR-Tools konnte keine Lösung finden")
+        raise RuntimeError("OR-Tools could not find a solution")
 
     order_indices = []
     index = routing.Start(0)
@@ -642,13 +645,13 @@ def main():
     """
     import argparse
     parser = argparse.ArgumentParser(description="Landsraad Route Planner")
-    parser.add_argument("--force-ortools", action="store_true", help="Nutze OR-Tools für jede Punktzahl (auch <=10)")
-    parser.add_argument("--progress", action="store_true", help="Zeige eine Fortschrittsanzeige beim Abarbeiten der Route")
-    parser.add_argument("--ascii-map", action="store_true", help="Zeige eine grobe ASCII-Karte der Punkte")
-    parser.add_argument("--fancy-prompt", action="store_true", help="Interaktive Auswahl mit Checkbox (requires questionary)")
-    parser.add_argument("--speed-kmh", type=float, default=170.0, help="Geschwindigkeit für Zeitabschätzung (km/h, default 170)")
-    parser.add_argument("--minimal", action="store_true", help="Reduzierte Farben und dezente Ausgabe")
-    parser.add_argument("--pause", action="store_true", help="Fenster am Ende offen halten (für .exe/Explorer-Start)")
+    parser.add_argument("--force-ortools", action="store_true", help="Use OR-Tools for all point counts (also <=10)")
+    parser.add_argument("--progress", action="store_true", help="Show a progress bar while processing the route")
+    parser.add_argument("--ascii-map", action="store_true", help="Show a rough ASCII map of the points")
+    parser.add_argument("--fancy-prompt", action="store_true", help="Interactive selection with checkboxes (requires questionary)")
+    parser.add_argument("--speed-kmh", type=float, default=170.0, help="Speed for ETA estimate (km/h, default 170)")
+    parser.add_argument("--minimal", action="store_true", help="Reduced colors and subtle output")
+    parser.add_argument("--pause", action="store_true", help="Keep window open at the end (for .exe/Explorer start)")
     args, _ = parser.parse_known_args()
 
     console = Console()
@@ -680,7 +683,7 @@ def main():
         console.print("[yellow]No coordinates found in frozen JSON. You may enter them manually.[/yellow]")
     # Ask for base coordinates early if a saved configuration exists.
     # Load previously saved base coordinates and map from a user config file.
-    # Prefer user config dir (APPDATA/XDG), fallback auf Legacy-Datei neben dem Script.
+    # Prefer user config dir (APPDATA/XDG), fallback to legacy file next to the script.
     def _user_config_path():
         try:
             if os.name == "nt":
@@ -692,7 +695,7 @@ def main():
             os.makedirs(cfgdir, exist_ok=True)
             return os.path.join(cfgdir, ".tsp_config")
         except Exception:
-            # Fallback: im Script-Verzeichnis (kann bei .exe temporär sein)
+            # Fallback: in the script directory (may be temporary for .exe)
             return os.path.join(script_dir, ".tsp_config")
     user_config_path = _user_config_path()
     legacy_config_path = os.path.join(script_dir, ".tsp_config")
@@ -897,7 +900,7 @@ def main():
         for h, info in frozen["houses"].items():
             if "x" in info and "y" in info:
                 default_coords[h] = (info["x"], info["y"])
-    # Algorithmuswahl mit Override (mit Status-Spinner)
+    # Choose algorithm with optional override (with status spinner)
     if len(points) == 0:
         print("No houses selected. Route is trivial: stay at base.")
         return
@@ -929,16 +932,16 @@ def main():
     # generating detailed instructions below.  The lookups map house
     # names to their routing group, display name and coordinate.
     map_group_lookup = {p[0]: p[2] for p in points}
-    # map_display_lookup entfällt, da die Besuchszeilen die Map nicht mehr ausschreiben
+    # map_display_lookup removed; visit lines no longer show map name
     coord_lookup = {p[0]: p[1] for p in points}
 
-    # Farbverwendung steuern (Minimal-Mode reduziert Farben)
+    # Control color usage (minimal mode reduces colors)
     use_colors = not args.minimal
-    # Farbzuordnung nach Wunsch:
-    # - Hagga Basin: türkis (Wasser/Sietch) -> turquoise2
-    # - Deep Desert: sand/orange -> gold3 (heller)
-    # - Arrakeen (Atreides): grün -> green3
-    # - Harko Village (Harkonnen): blutrot -> dark_red
+    # Preferred color mapping:
+    # - Hagga Basin: turquoise (water/sietch) -> turquoise2
+    # - Deep Desert: sand/orange -> gold3 (bright)
+    # - Arrakeen (Atreides): green -> green3
+    # - Harko Village (Harkonnen): blood red -> dark_red
     map_colors = {"hagga": "turquoise2", "deep": "gold3", "harko": "dark_red", "arrakeen": "green3"}
 
     # Compute an approximate real‑world distance (in km) by applying
@@ -1099,22 +1102,22 @@ def main():
     console.print("\n[bold]Route instructions:[/bold]")
     if use_colors:
         console.print("[dim]Legend: [turquoise2]Hagga Basin[/], [gold3]Deep Desert[/], [green3]Arrakeen[/], [dark_red]Harko Village[/][/dim]")
-    # Uhrzeit-Mapping
+    # Clock-face mapping in English
     dir_to_clock = {
-        "north": "12 Uhr",
-        "north-east": "2 Uhr",
-        "east": "3 Uhr",
-        "south-east": "5 Uhr",
-        "south": "6 Uhr",
-        "south-west": "7 Uhr",
-        "west": "9 Uhr",
-        "north-west": "10 Uhr",
+        "north": "12 o'clock",
+        "north-east": "2 o'clock",
+        "east": "3 o'clock",
+        "south-east": "5 o'clock",
+        "south": "6 o'clock",
+        "south-west": "7 o'clock",
+        "west": "9 o'clock",
+        "north-west": "10 o'clock",
     }
 
     current_group = base_map
-    current_pos = base  # Koord der aktuellen Position
+    current_pos = base  # Current position
 
-    # Fortschrittsanzeige optional
+    # Optional progress display
     prog = Progress() if args.progress else None
     if prog:
         prog.start()
@@ -1125,7 +1128,7 @@ def main():
         dest_pos = coord_lookup[name]
 
         if dest_group != current_group:
-            # Kombiniere Verlassen + Betreten in eine kompakte Anweisung
+            # Combine leaving + entering into a compact instruction
             leave_msg = ""
             if current_group == "hagga":
                 main_dir = nearest_cardinal_side(current_pos, exits["hagga_bounds"])
@@ -1172,9 +1175,9 @@ def main():
 
             current_group = dest_group
 
-        # Ziel aufsuchen
+    # Visit destination
         x, y = dest_pos
-        # Hausname mit erstem Buchstaben groß, Link generieren (inkl. Slug-Overrides)
+    # Capitalize house name and generate link (incl. slug overrides)
         slug_name = SLUG_OVERRIDES.get(name.lower(), name.lower())
         house_url = f"https://dune.gaming.tools/landsraad/house{slug_name}"
         house_label = name.capitalize()
@@ -1197,7 +1200,7 @@ def main():
 
     console.print(Panel.fit("Return to base to complete the route.", style="orange1"))
 
-    # Zusammenfassung
+    # Summary
     hours = real_dist_km / max(args.speed_kmh, 1e-6)
     hh = int(hours)
     mm = int((hours - hh) * 60)
