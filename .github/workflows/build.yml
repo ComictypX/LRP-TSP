@@ -119,3 +119,36 @@ jobs:
             release_artifacts/**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Mark previous release as "Last release"
+        uses: actions/github-script@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          script: |
+            const currentTag = (process.env.GITHUB_REF || '').replace('refs/tags/','');
+            const all = await github.paginate(github.rest.repos.listReleases, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+            // Exclude the current tag release and drafts; pick most recent prior
+            const prev = all
+              .filter(r => r.tag_name !== currentTag && !r.draft)
+              .sort((a,b) => new Date(b.created_at) - new Date(a.created_at))[0];
+            if (!prev) {
+              core.info('No previous release found to mark.');
+              return;
+            }
+            const newName = `${prev.name || prev.tag_name} — Last release`;
+            const newBody = `Marked as Last release before ${currentTag}.\n\n${prev.body || ''}`.trim();
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: prev.id,
+              prerelease: false,
+              name: newName,
+              body: newBody,
+              make_latest: 'true',
+            });
+            core.info(`Updated previous release ${prev.tag_name} as Last release.`);
