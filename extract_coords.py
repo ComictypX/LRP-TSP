@@ -143,9 +143,13 @@ def main():
             # Ensure explicit overrides are present
             # Alexin -> Harko, take coordinates from Harko hit if available
             payload["houses"].setdefault("alexin", {}).update({"map": "harko"})
-            alexin_harko = next((r for r in results if r["house"] == "alexin" and r["map"] == "harko"), None)
+            alexin_harko = next(
+                (r for r in results if r["house"] == "alexin" and r["map"] == "harko"), None
+            )
             if alexin_harko:
-                payload["houses"]["alexin"].update({"x": int(alexin_harko["x"]), "y": int(alexin_harko["y"])})
+                payload["houses"]["alexin"].update(
+                    {"x": int(alexin_harko["x"]), "y": int(alexin_harko["y"])}
+                )
 
             # Thorvald -> Hagga with fixed authoritative coordinates
             payload["houses"]["thorvald"] = {

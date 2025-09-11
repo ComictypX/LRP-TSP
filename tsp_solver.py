@@ -202,14 +202,14 @@ def get_user_input_coords(default_coords, skip_base=False, console=None, fancy=F
     if fancy and default_coords:
         try:
             import importlib
+
             questionary = importlib.import_module("questionary")
             choices = [h for h in sorted(default_coords.keys())]
             choices_display = [c.title() for c in choices]
             picked = questionary.checkbox(
                 "Select houses (Space to toggle, Enter to confirm)",
-                choices=[{"name": "All", "value": "__all__"}] + [
-                    {"name": n, "value": v} for n, v in zip(choices_display, choices)
-                ],
+                choices=[{"name": "All", "value": "__all__"}]
+                + [{"name": n, "value": v} for n, v in zip(choices_display, choices)],
             ).ask()
             if not picked:
                 houses_raw = []
@@ -265,13 +265,14 @@ def get_user_input_coords(default_coords, skip_base=False, console=None, fancy=F
         if fancy:
             try:
                 import importlib
+
                 questionary = importlib.import_module("questionary")
                 base_map_choice = questionary.select(
                     "Where is your base?",
                     choices=[
                         {"name": "Hagga Basin", "value": "hagga"},
-                        {"name": "Deep Desert", "value": "deep"}
-                    ]
+                        {"name": "Deep Desert", "value": "deep"},
+                    ],
                 ).ask()
                 base_map = base_map_choice
             except Exception:
@@ -284,18 +285,28 @@ def get_user_input_coords(default_coords, skip_base=False, console=None, fancy=F
                     base_map = base_map_input
                     break
                 print("Please enter 'hagga' or 'deep'.")
-        
+
         # Show relevant links based on base map
         if console is not None:
-            console.print("[dim]Tip: You can find your base coordinates on the map of your region.[/dim]")
+            console.print(
+                "[dim]Tip: You can find your base coordinates on the map of your region.[/dim]"
+            )
             if base_map == "hagga":
-                console.print("[dim]  - Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin[/dim]")
+                console.print(
+                    "[dim]  - Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin[/dim]"
+                )
             elif base_map == "deep":
-                console.print("[dim]  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert[/dim]")
+                console.print(
+                    "[dim]  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert[/dim]"
+                )
             else:
                 # fallback: show both links if something unexpected occurs
-                console.print("[dim]  - Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin[/dim]")
-                console.print("[dim]  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert[/dim]")
+                console.print(
+                    "[dim]  - Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin[/dim]"
+                )
+                console.print(
+                    "[dim]  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert[/dim]"
+                )
         else:
             print("Tip: You can find your base coordinates on the map of your region.")
             if base_map == "hagga":
@@ -306,7 +317,7 @@ def get_user_input_coords(default_coords, skip_base=False, console=None, fancy=F
                 # fallback: show both links if something unexpected occurs
                 print("  - Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin")
                 print("  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert")
-        
+
         base_x = parse_number("Enter your base X‑coordinate: ")
         base_y = parse_number("Enter your base Y‑coordinate: ")
         base = (base_x, base_y)
@@ -579,6 +590,7 @@ def solve_route_with_ortools(base, base_map, points, exits, time_limit_s=5):
     """Solve the route with OR-Tools (ATSP), using compute_cross_distance as cost."""
     try:
         import importlib
+
         cs = importlib.import_module("ortools.constraint_solver")
         pywrapcp = cs.pywrapcp
         routing_enums_pb2 = cs.routing_enums_pb2
@@ -613,7 +625,9 @@ def solve_route_with_ortools(base, base_map, points, exits, time_limit_s=5):
 
     params = pywrapcp.DefaultRoutingSearchParameters()
     params.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
-    params.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
+    params.local_search_metaheuristic = (
+        routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
+    )
     params.time_limit.FromSeconds(time_limit_s)
 
     solution = routing.SolveWithParameters(params)
@@ -644,14 +658,29 @@ def main():
     prompted for any missing coordinates along with their base location.
     """
     import argparse
+
     parser = argparse.ArgumentParser(description="Landsraad Route Planner")
-    parser.add_argument("--force-ortools", action="store_true", help="Use OR-Tools for all point counts (also <=10)")
-    parser.add_argument("--progress", action="store_true", help="Show a progress bar while processing the route")
-    parser.add_argument("--ascii-map", action="store_true", help="Show a rough ASCII map of the points")
-    parser.add_argument("--fancy-prompt", action="store_true", help="Interactive selection with checkboxes (requires questionary)")
-    parser.add_argument("--speed-kmh", type=float, default=170.0, help="Speed for ETA estimate (km/h, default 170)")
+    parser.add_argument(
+        "--force-ortools", action="store_true", help="Use OR-Tools for all point counts (also <=10)"
+    )
+    parser.add_argument(
+        "--progress", action="store_true", help="Show a progress bar while processing the route"
+    )
+    parser.add_argument(
+        "--ascii-map", action="store_true", help="Show a rough ASCII map of the points"
+    )
+    parser.add_argument(
+        "--fancy-prompt",
+        action="store_true",
+        help="Interactive selection with checkboxes (requires questionary)",
+    )
+    parser.add_argument(
+        "--speed-kmh", type=float, default=170.0, help="Speed for ETA estimate (km/h, default 170)"
+    )
     parser.add_argument("--minimal", action="store_true", help="Reduced colors and subtle output")
-    parser.add_argument("--pause", action="store_true", help="Keep window open at the end (for .exe/Explorer start)")
+    parser.add_argument(
+        "--pause", action="store_true", help="Keep window open at the end (for .exe/Explorer start)"
+    )
     args, _ = parser.parse_known_args()
 
     console = Console()
@@ -663,10 +692,13 @@ def main():
     frozen = None
     frozen_path = os.path.join(script_dir, "data", "world_data.json")
     if not os.path.exists(frozen_path):
-        print("Error: data/world_data.json not found. Generate it with 'extract_coords.py --mode aggregated --freeze'.")
+        print(
+            "Error: data/world_data.json not found. Generate it with 'extract_coords.py --mode aggregated --freeze'."
+        )
         return
     try:
         import json
+
         with open(frozen_path, "r", encoding="utf-8") as f:
             frozen = json.load(f)
     except Exception as e:
@@ -678,9 +710,14 @@ def main():
         if isinstance(info, dict) and ("x" in info and "y" in info):
             default_coords[h] = (float(info["x"]), float(info["y"]))
     if default_coords:
-        console.print(f"[green]Loaded {len(default_coords)} house coordinates from frozen JSON.[/green]")
+        console.print(
+            f"[green]Loaded {len(default_coords)} house coordinates from frozen JSON.[/green]"
+        )
     else:
-        console.print("[yellow]No coordinates found in frozen JSON. You may enter them manually.[/yellow]")
+        console.print(
+            "[yellow]No coordinates found in frozen JSON. You may enter them manually.[/yellow]"
+        )
+
     # Ask for base coordinates early if a saved configuration exists.
     # Load previously saved base coordinates and map from a user config file.
     # Prefer user config dir (APPDATA/XDG), fallback to legacy file next to the script.
@@ -690,17 +727,24 @@ def main():
                 base = os.getenv("APPDATA") or os.path.expanduser("~")
                 cfgdir = os.path.join(base, "TSP-Dune")
             else:
-                base = os.getenv("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+                base = os.getenv("XDG_CONFIG_HOME") or os.path.join(
+                    os.path.expanduser("~"), ".config"
+                )
                 cfgdir = os.path.join(base, "tsp-dune")
             os.makedirs(cfgdir, exist_ok=True)
             return os.path.join(cfgdir, ".tsp_config")
         except Exception:
             # Fallback: in the script directory (may be temporary for .exe)
             return os.path.join(script_dir, ".tsp_config")
+
     user_config_path = _user_config_path()
     legacy_config_path = os.path.join(script_dir, ".tsp_config")
     saved_base = None
-    read_path = user_config_path if os.path.exists(user_config_path) else (legacy_config_path if os.path.exists(legacy_config_path) else None)
+    read_path = (
+        user_config_path
+        if os.path.exists(user_config_path)
+        else (legacy_config_path if os.path.exists(legacy_config_path) else None)
+    )
     if read_path:
         try:
             with open(read_path, "r", encoding="utf-8") as f:
@@ -709,7 +753,9 @@ def main():
             if len(parts) == 3:
                 sx, sy, smap = parts
                 saved_base = (float(sx), float(sy), smap)
-                console.print(f"[cyan]Saved base coordinates detected: {sx}, {sy} in {smap.title()}.[/cyan]")
+                console.print(
+                    f"[cyan]Saved base coordinates detected: {sx}, {sy} in {smap.title()}.[/cyan]"
+                )
         except Exception:
             saved_base = None
     # Decide whether to use saved base
@@ -722,7 +768,9 @@ def main():
             use_saved_base = True
             base = (saved_base[0], saved_base[1])
             base_map = "deep" if saved_base[2].lower().startswith("d") else "hagga"
-            console.print(f"[green]Using saved base: {base[0]}, {base[1]} in {saved_base[2].title()}.[/green]")
+            console.print(
+                f"[green]Using saved base: {base[0]}, {base[1]} in {saved_base[2].title()}.[/green]"
+            )
     # gather user input (house names, their coordinates, base)
     # If we use the saved base, skip prompting for base coordinates in the input function
     house_names, coords, manual_base = get_user_input_coords(
@@ -737,7 +785,12 @@ def main():
     # Build mappings from JSON (map group + display)
     house_to_map_group = {}
     house_to_map_display = {}
-    pretty = {"hagga": "Hagga Basin", "harko": "Harko Village", "arrakeen": "Arrakeen", "deep": "Deep Desert"}
+    pretty = {
+        "hagga": "Hagga Basin",
+        "harko": "Harko Village",
+        "arrakeen": "Arrakeen",
+        "deep": "Deep Desert",
+    }
     for h, info in houses_obj.items():
         m = info.get("map") if isinstance(info, dict) else None
         if m:
@@ -907,10 +960,14 @@ def main():
     with console.status("Solving route...", spinner="dots"):
         if args.force_ortools:
             try:
-                route, _route_cost = solve_route_with_ortools(base, base_map, points, exits, time_limit_s=5)
+                route, _route_cost = solve_route_with_ortools(
+                    base, base_map, points, exits, time_limit_s=5
+                )
                 alg = "OR-Tools (GLS, forced)"
             except Exception:
-                console.print("[yellow]OR-Tools unavailable or failed. Falling back to optimal solver.[/yellow]")
+                console.print(
+                    "[yellow]OR-Tools unavailable or failed. Falling back to optimal solver.[/yellow]"
+                )
                 route, _route_cost = find_shortest_route(base, base_map, points, exits)
                 alg = "optimal (Fallback)"
         elif len(points) <= 10:
@@ -918,7 +975,9 @@ def main():
             alg = "optimal"
         else:
             try:
-                route, _route_cost = solve_route_with_ortools(base, base_map, points, exits, time_limit_s=5)
+                route, _route_cost = solve_route_with_ortools(
+                    base, base_map, points, exits, time_limit_s=5
+                )
                 alg = "OR-Tools (GLS)"
             except Exception:
                 route, _route_cost = nearest_neighbour_route_map(base, base_map, points, exits)
@@ -1078,10 +1137,12 @@ def main():
             minx, maxx = min(xs), max(xs)
             miny, maxy = min(ys), max(ys)
             width, height = 60, 16
+
             def project(pt):
                 x = int((pt[0] - minx) / (maxx - minx + 1e-6) * (width - 1))
                 y = int((pt[1] - miny) / (maxy - miny + 1e-6) * (height - 1))
                 return x, y
+
             grid = [[" "] * width for _ in range(height)]
             for name, (px, py) in pts:
                 gx, gy = project((px, py))
@@ -1101,7 +1162,9 @@ def main():
     # direction is needed because those maps have a single exit point.
     console.print("\n[bold]Route instructions:[/bold]")
     if use_colors:
-        console.print("[dim]Legend: [turquoise2]Hagga Basin[/], [gold3]Deep Desert[/], [green3]Arrakeen[/], [dark_red]Harko Village[/][/dim]")
+        console.print(
+            "[dim]Legend: [turquoise2]Hagga Basin[/], [gold3]Deep Desert[/], [green3]Arrakeen[/], [dark_red]Harko Village[/][/dim]"
+        )
     # Clock-face mapping in English
     dir_to_clock = {
         "north": "12 o'clock",
@@ -1134,7 +1197,9 @@ def main():
                 main_dir = nearest_cardinal_side(current_pos, exits["hagga_bounds"])
                 clock = dir_to_clock.get(main_dir, "")
                 leave_msg = (
-                    f"Leave Hagga Basin via its {main_dir} border ({clock})" if clock else f"Leave Hagga Basin via its {main_dir} border"
+                    f"Leave Hagga Basin via its {main_dir} border ({clock})"
+                    if clock
+                    else f"Leave Hagga Basin via its {main_dir} border"
                 )
             elif current_group == "deep":
                 leave_msg = "Leave Deep Desert heading south"
@@ -1146,7 +1211,9 @@ def main():
             if dest_group == "deep":
                 left, right, _, _ = exits["deep_bounds"]
                 ratio = (dest_pos[0] - left) / (right - left) if right != left else 0.5
-                sector = "south-west" if ratio < 1 / 3 else ("south" if ratio < 2 / 3 else "south-east")
+                sector = (
+                    "south-west" if ratio < 1 / 3 else ("south" if ratio < 2 / 3 else "south-east")
+                )
                 clock = dir_to_clock.get(sector, "")
                 # west -> left, middle -> middle, east -> right
                 if sector == "south-west":
@@ -1156,28 +1223,34 @@ def main():
                 else:
                     which = "right"
                 enter_msg = (
-                    f"enter Deep Desert via the {which} entrance ({clock})" if clock else f"enter Deep Desert via the {which} entrance"
+                    f"enter Deep Desert via the {which} entrance ({clock})"
+                    if clock
+                    else f"enter Deep Desert via the {which} entrance"
                 )
             elif dest_group == "hagga":
                 side12 = entry_side_generic(dest_pos, exits["hagga_bounds"])
                 clock = dir_to_clock.get(side12, "")
                 enter_msg = (
-                    f"re-enter Hagga Basin from the {side12} ({clock})" if clock else f"re-enter Hagga Basin from the {side12}"
+                    f"re-enter Hagga Basin from the {side12} ({clock})"
+                    if clock
+                    else f"re-enter Hagga Basin from the {side12}"
                 )
             else:
                 hub = "Arrakeen" if dest_group == "arrakeen" else "Harko Village"
                 enter_msg = f"travel to {hub}"
 
             combined = (
-                f"{leave_msg} and {enter_msg}." if leave_msg and enter_msg else (f"{leave_msg}." if leave_msg else f"{enter_msg}.")
+                f"{leave_msg} and {enter_msg}."
+                if leave_msg and enter_msg
+                else (f"{leave_msg}." if leave_msg else f"{enter_msg}.")
             )
             console.print(Panel.fit(combined, style="orange1"))
 
             current_group = dest_group
 
-    # Visit destination
+        # Visit destination
         x, y = dest_pos
-    # Capitalize house name and generate link (incl. slug overrides)
+        # Capitalize house name and generate link (incl. slug overrides)
         slug_name = SLUG_OVERRIDES.get(name.lower(), name.lower())
         house_url = f"https://dune.gaming.tools/landsraad/house{slug_name}"
         house_label = name.capitalize()
@@ -1204,10 +1277,12 @@ def main():
     hours = real_dist_km / max(args.speed_kmh, 1e-6)
     hh = int(hours)
     mm = int((hours - hh) * 60)
-    summary = Table.grid(padding=(0,1))
+    summary = Table.grid(padding=(0, 1))
     summary.add_row("[bold]Visited[/bold]", f"{len(route)} stations")
     summary.add_row("[bold]Distance[/bold]", f"[cyan]{real_dist_km:.2f} km[/cyan]")
-    summary.add_row("[bold]ETA[/bold]", f"[magenta]{hh}h {mm}m[/magenta] @ {args.speed_kmh:.0f} km/h")
+    summary.add_row(
+        "[bold]ETA[/bold]", f"[magenta]{hh}h {mm}m[/magenta] @ {args.speed_kmh:.0f} km/h"
+    )
     summary.add_row("[bold]Solver[/bold]", alg)
     console.print(Panel(summary, title="Summary", border_style="green", expand=False))
 
