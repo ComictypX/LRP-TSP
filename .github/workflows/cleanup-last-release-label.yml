@@ -1,0 +1,39 @@
+name: Cleanup Last Release Labels
+
+on:
+  workflow_dispatch:
+    inputs:
+      suffix:
+        description: "Suffix to remove from release names"
+        required: false
+        default: " — Last release"
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove suffix from release names
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const suffix = core.getInput('suffix') || ' — Last release';
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+            for (const r of releases) {
+              if ((r.name || '').endsWith(suffix)) {
+                const newName = (r.name || '').slice(0, -suffix.length).trim();
+                await github.rest.repos.updateRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: r.id,
+                  name: newName,
+                });
+                core.info(`Renamed ${r.tag_name} to '${newName}'.`);
+              }
+            }
