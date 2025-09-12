@@ -1,4 +1,4 @@
-# Changelog
+# Changelog — Landsraad Route Planner (LRP-TSP)
 
 All notable changes to this project will be documented in this file.
 

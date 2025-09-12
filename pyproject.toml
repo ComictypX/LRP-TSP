@@ -3,14 +3,14 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tsp-dune"
+name = "lrp-tsp"
 version = "0.1.0"
-description = "Route and TSP planner for Dune: Awakening (Landsraad houses)"
+description = "Landsraad Route Planner (LRP-TSP) for Dune: Awakening maps"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [{ name = "", email = "" }]
-keywords = ["dune", "tsp", "routing", "cli"]
+keywords = ["dune", "landsraad", "tsp", "routing", "cli"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
@@ -26,7 +26,7 @@ dependencies = [
 ortools = ["ortools>=9.9.0"]
 
 [project.scripts]
-tsp-dune = "tsp_solver:main"
+lrp-tsp = "tsp_solver:main"
 
 [tool.setuptools]
 # Single-module project (tsp_solver.py in repository root)

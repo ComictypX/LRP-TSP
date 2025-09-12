@@ -1,6 +1,6 @@
-# TSP-Dune
+# Landsraad Route Planner (LRP-TSP)
 
-A fast route planner (TSP - Traveling Salesman Problem) for **Dune: Awakening**. It computes efficient visit orders for houses across maps (Hagga, Deep Desert, Arrakeen, Harko) and prints concise, color-coded instructions. Runtime uses a frozen data file (`data/world_data.json`) with known houses and exits.
+A fast route planner (TSP - Traveling Salesman Problem) for **Dune: Awakening**. It computes efficient visit orders for Landsraad houses across maps (Hagga, Deep Desert, Arrakeen, Harko) and prints concise, color-coded instructions. Runtime uses a frozen data file (`data/world_data.json`) with known houses and exits.
 
 ## Features
 
@@ -34,10 +34,10 @@ Or via batch script:
 ```
 
 ### Standalone downloads (Multi-OS)
-Grab the latest prerelease from [GitHub Releases](https://github.com/ComictypX/TSP-Dune/releases):
-- Windows: `TSP-Dune.exe`
-- Linux: `TSP-Dune-linux.tar.gz`
-- macOS: `TSP-Dune-macos.tar.gz`
+- Grab the latest prerelease from [GitHub Releases](https://github.com/ComictypX/LRP-TSP/releases):
+- Windows: `LRP-TSP.exe`
+- Linux: `LRP-TSP-linux.tar.gz`
+- macOS: `LRP-TSP-macos.tar.gz`
 
 ## Usage
 
@@ -52,7 +52,7 @@ python tsp_solver.py --ascii-map --progress --speed-kmh 200 --minimal
 
 Or with the EXE (Windows):
 ```powershell
-TSP-Dune.exe --ascii-map --progress
+LRP-TSP.exe --ascii-map --progress
 ```
 
 ### Flags
@@ -66,7 +66,7 @@ TSP-Dune.exe --ascii-map --progress
 
 ### Example output
 ```
-TSP-Dune v0.1.x - Route planner for Dune: Awakening
+LRP-TSP v0.2.x - Landsraad Route Planner for Dune: Awakening
 
 Visit Harkonnen (12, 34) [🔗 dune.gaming.tools/harkonnen]
 Leave Harko and travel to Arrakeen (right entrance).

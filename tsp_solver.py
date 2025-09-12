@@ -650,6 +650,7 @@ def solve_route_with_ortools(base, base_map, points, exits, time_limit_s=5):
 
 
 def main():
+    print("Landsraad Route Planner (LRP-TSP) — Optimal house route for Dune: Awakening")
     """
     Entry point for the modern Landsraad route planner.  It attempts
     to prepopulate coordinates by loading a raw map file from the
