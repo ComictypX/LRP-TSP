@@ -1151,12 +1151,62 @@ def main():
                 return x, y
 
             grid = [[" "] * width for _ in range(height)]
+            # Punkte setzen
             for name, (px, py) in pts:
                 gx, gy = project((px, py))
                 ch = name[0].upper()
                 grid[gy][gx] = ch
+
+            # Route als Linie/Pfeile einzeichnen
+            for i in range(len(pts) - 1):
+                (name1, (px1, py1)) = pts[i]
+                (name2, (px2, py2)) = pts[i + 1]
+                x1, y1 = project((px1, py1))
+                x2, y2 = project((px2, py2))
+                dx = x2 - x1
+                dy = y2 - y1
+                steps = max(abs(dx), abs(dy))
+                for s in range(1, steps + 1):
+                    xi = x1 + int(round(s * dx / steps))
+                    yi = y1 + int(round(s * dy / steps))
+                    # Richtung bestimmen (Pfeil nur am letzten Schritt)
+                    if s == steps:
+                        if dx == 0 and dy > 0:
+                            arrow = "↓"
+                        elif dx == 0 and dy < 0:
+                            arrow = "↑"
+                        elif dy == 0 and dx > 0:
+                            arrow = "→"
+                        elif dy == 0 and dx < 0:
+                            arrow = "←"
+                        elif dx > 0 and dy > 0:
+                            arrow = "↘"
+                        elif dx < 0 and dy < 0:
+                            arrow = "↖"
+                        elif dx > 0 and dy < 0:
+                            arrow = "↗"
+                        elif dx < 0 and dy > 0:
+                            arrow = "↙"
+                        else:
+                            arrow = "*"
+                        # Nur setzen, wenn kein Punkt da ist
+                        if grid[yi][xi] == " ":
+                            grid[yi][xi] = arrow
+                    else:
+                        # Linie wie bisher
+                        if dx == 0:
+                            line = "│"
+                        elif dy == 0:
+                            line = "─"
+                        elif (dx > 0 and dy > 0) or (dx < 0 and dy < 0):
+                            line = "╲"
+                        else:
+                            line = "╱"
+                        if grid[yi][xi] == " ":
+                            grid[yi][xi] = line
+
             art = "\n".join("".join(row) for row in grid)
-            console.print(Panel(art, title="Map (initial letter marks)", style="blue"))
+            console.print(Panel(art, title="Map (route with arrows)", style="blue"))
         except Exception:
             console.print("[yellow]ASCII map rendering failed.[/yellow]")
 
