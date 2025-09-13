@@ -1129,9 +1129,15 @@ def main():
     if args.ascii_map:
         try:
             console.print(Panel.fit("ASCII Map (approx)", style="blue"))
-            pts = [(name, coord_lookup[name]) for name in route]
-            # include base
-            pts = [("Base", base)] + pts
+            # Nur Orte in Hagga Basin anzeigen
+            pts = [
+                (name, coord_lookup[name])
+                for name in route
+                if map_group_lookup.get(name) == "hagga"
+            ]
+            # Base nur anzeigen, wenn sie in Hagga liegt
+            if base_map == "hagga":
+                pts = [("Base", base)] + pts
             # compute bounds
             xs = [p[1][0] for p in pts]
             ys = [p[1][1] for p in pts]
@@ -1147,7 +1153,6 @@ def main():
             grid = [[" "] * width for _ in range(height)]
             for name, (px, py) in pts:
                 gx, gy = project((px, py))
-                gy = (height - 1) - gy
                 ch = name[0].upper()
                 grid[gy][gx] = ch
             art = "\n".join("".join(row) for row in grid)
