@@ -204,9 +204,15 @@ class Wizard:
                 with Live(console=self.console, refresh_per_second=10, transient=False) as live:
                     self.live = live
                     for i, step in enumerate(steps, start=1):
+                        if step.__name__ == 'step_confirm_base_map' and self.use_saved_base:
+                            self.steps_total = 2  # Adjust total if skipping
+                            continue  # Skip confirm if saved base is used
                         step(i)
         else:
             for i, step in enumerate(steps, start=1):
+                if step.__name__ == 'step_confirm_base_map' and self.use_saved_base:
+                    self.steps_total = 2  # Adjust total if skipping
+                    continue  # Skip confirm if saved base is used
                 self.console.clear()
                 step(i)
 
