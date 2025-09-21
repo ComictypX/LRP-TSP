@@ -1,5 +1,7 @@
 # Landsraad Route Planner (LRP-TSP)
 
+![Programm Demo](demo.gif)
+
 A fast route planner (TSP - Traveling Salesman Problem) for **Dune: Awakening**. It computes efficient visit orders for Landsraad houses across maps (Hagga, Deep Desert, Arrakeen, Harko) and prints concise, color-coded instructions. Runtime uses a frozen data file (`data/world_data.json`) with known houses and exits.
 
 ## Features
