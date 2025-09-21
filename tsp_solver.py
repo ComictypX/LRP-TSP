@@ -11,6 +11,9 @@ from rich.progress import Progress
 from rich.live import Live
 from rich.layout import Layout
 
+# Für Hotkeys in Route-Anzeige
+import msvcrt
+
 # Overrides for special house slugs on dune.gaming.tools
 SLUG_OVERRIDES = {
     "spinnette": "spinette",
@@ -223,6 +226,103 @@ class Wizard:
             "base": self.base,
             "base_map": self.base_map,
         }
+
+
+class RouteViewer:
+    """Viewer für die Route-Anzeige mit Navigation."""
+
+    def __init__(self, console: Console, map_art: str | None, instructions_content: str, summary_table, use_colors: bool):
+        self.console = console
+        self.map_art = map_art
+        self.instructions_content = instructions_content
+        self.summary_table = summary_table
+        self.use_colors = use_colors
+        self.renderables = []
+        self.current_index = 0
+
+    def _build_renderables(self):
+        self.renderables = []
+        # Map
+        if self.map_art:
+            self.renderables.append(Panel(self.map_art, title="Map (route with arrows)", style="blue"))
+        
+        # Instructions
+        body_height = max(1, self.console.height - 3 - 5)  # Header 3, Footer 5
+        lines = self.instructions_content.split('\n')
+        if len(lines) > body_height:
+            parts = []
+            for i in range(0, len(lines), body_height):
+                part_lines = lines[i:i + body_height]
+                parts.append('\n'.join(part_lines))
+            for i, part in enumerate(parts):
+                title = "Route Instructions" if i == 0 else f"Route Instructions (Seite {i+1})"
+                self.renderables.append(Panel(part, title=title, border_style="cyan"))
+        else:
+            self.renderables.append(Panel(self.instructions_content, title="Route Instructions", border_style="cyan"))
+        
+        # Summary
+        self.renderables.append(Panel(self.summary_table, title="Summary", border_style="green", expand=False))
+
+    def display(self):
+        """Zeige die Route mit Navigation."""
+        self._build_renderables()
+        if not self.renderables:
+            return
+
+        with self.console.screen():
+            live = Live(console=self.console, refresh_per_second=4, transient=False)  # Niedrigere Rate
+            live.start()
+            last_height = self.console.height
+            try:
+                while True:
+                    # Prüfe auf signifikante Größenänderung (mehr als 2 Zeilen)
+                    if abs(self.console.height - last_height) > 2:
+                        self._build_renderables()
+                        last_height = self.console.height
+                        # Reset index if out of bounds
+                        if self.current_index >= len(self.renderables):
+                            self.current_index = len(self.renderables) - 1
+
+                    legend_panel = Panel(
+                        "[dim]Legend: [turquoise2]Hagga Basin[/], [gold3]Deep Desert[/], [green3]Arrakeen[/], [dark_red]Harko Village[/][/dim]",
+                        border_style="cyan"
+                    ) if self.use_colors else Panel("", border_style="cyan")
+                    hotkeys_panel = Panel("←/→ Navigate, q = Quit", border_style="cyan")
+                    footer = Columns([hotkeys_panel, legend_panel], equal=True)
+                    
+                    layout = Layout()
+                    layout.split(
+                        Layout(name="header", size=3),
+                        Layout(name="body"),
+                        Layout(name="footer", size=5),
+                    )
+                    header = Panel.fit(f"Route Display  •  Page {self.current_index + 1}/{len(self.renderables)}", title="LRP-TSP", border_style="cyan")
+                    layout["header"].update(header)
+                    layout["body"].update(self.renderables[self.current_index])
+                    layout["footer"].update(footer)
+                    
+                    live.update(layout)
+
+                    # Warte auf Eingabe
+                    import msvcrt
+                    if msvcrt.kbhit():
+                        key = msvcrt.getch()
+                        if key == b'q' or key == b'Q':
+                            break
+                        elif key == b'\xe0':  # Pfeiltaste Präfix
+                            key = msvcrt.getch()
+                            if key == b'K':  # Links
+                                self.current_index = max(0, self.current_index - 1)
+                            elif key == b'M':  # Rechts
+                                self.current_index = min(len(self.renderables) - 1, self.current_index + 1)
+                        elif key == b'\x00':  # Andere Spezialtasten
+                            key = msvcrt.getch()
+                            if key == b'K':  # Links (alternative)
+                                self.current_index = max(0, self.current_index - 1)
+                            elif key == b'M':  # Rechts (alternative)
+                                self.current_index = min(len(self.renderables) - 1, self.current_index + 1)
+            finally:
+                live.stop()
 
 
 def compute_distance(p1, p2):
@@ -1320,10 +1420,14 @@ def main():
         else:
             return "east"
 
+    # Sammle Daten für Route-Anzeige
+    map_art = None
+    instructions_content = ""
+    summary_table = None
+
     # Optional ASCII map
     if args.ascii_map:
         try:
-            console.print(Panel.fit("ASCII Map (approx)", style="blue"))
             # Nur Orte in Hagga Basin anzeigen
             pts = [
                 (name, coord_lookup[name])
@@ -1400,10 +1504,9 @@ def main():
                         if grid[yi][xi] == " ":
                             grid[yi][xi] = line
 
-            art = "\n".join("".join(row) for row in grid)
-            console.print(Panel(art, title="Map (route with arrows)", style="blue"))
+            map_art = "\n".join("".join(row) for row in grid)
         except Exception:
-            console.print("[yellow]ASCII map rendering failed.[/yellow]")
+            map_art = "[yellow]ASCII map rendering failed.[/yellow]"
 
     # Prepare detailed route instructions.  We track the current map, the
     # current position and the display name of the current map.  For each
@@ -1411,11 +1514,7 @@ def main():
     # exit (for departures from Hagga) or which sector to enter (for
     # arrivals in Deep Desert).  When leaving Arrakeen or Harko, no
     # direction is needed because those maps have a single exit point.
-    console.print("\n[bold]Route instructions:[/bold]")
-    if use_colors:
-        console.print(
-            "[dim]Legend: [turquoise2]Hagga Basin[/], [gold3]Deep Desert[/], [green3]Arrakeen[/], [dark_red]Harko Village[/][/dim]"
-        )
+    instructions_content = "[bold]Route instructions:[/bold]\n\n"
     # Clock-face mapping in English
     dir_to_clock = {
         "north": "12 o'clock",
@@ -1495,7 +1594,7 @@ def main():
                 if leave_msg and enter_msg
                 else (f"{leave_msg}." if leave_msg else f"{enter_msg}.")
             )
-            console.print(Panel.fit(combined, style="orange1"))
+            instructions_content += combined + "\n\n"
 
             current_group = dest_group
 
@@ -1507,13 +1606,10 @@ def main():
         house_label = name.capitalize()
         if use_colors:
             color = map_colors.get(dest_group, "white")
-            console.print(
-                f"Visit [link={house_url}][{color}]{escape(house_label)}[/][/link] [dim]({x:.0f}, {y:.0f})[/]."
-            )
+            visit_line = f"Visit [link={house_url}][{color}]{escape(house_label)}[/][/link] [dim]({x:.0f}, {y:.0f})[/]."
         else:
-            console.print(
-                f"Visit [link={house_url}]{escape(house_label)}[/link] ({x:.0f}, {y:.0f})."
-            )
+            visit_line = f"Visit [link={house_url}]{escape(house_label)}[/link] ({x:.0f}, {y:.0f})."
+        instructions_content += visit_line + "\n\n"
 
         current_pos = dest_pos
         if prog:
@@ -1522,20 +1618,22 @@ def main():
     if prog:
         prog.stop()
 
-    console.print(Panel.fit("Return to base to complete the route.", style="orange1"))
+    instructions_content += "Return to base to complete the route."
 
     # Summary
     hours = real_dist_km / max(args.speed_kmh, 1e-6)
     hh = int(hours)
     mm = int((hours - hh) * 60)
-    summary = Table.grid(padding=(0, 1))
-    summary.add_row("[bold]Visited[/bold]", f"{len(route)} stations")
-    summary.add_row("[bold]Distance[/bold]", f"[cyan]{real_dist_km:.2f} km[/cyan]")
-    summary.add_row(
+    summary_table = Table.grid(padding=(0, 1))
+    summary_table.add_row("[bold]Visited[/bold]", f"{len(route)} stations")
+    summary_table.add_row("[bold]Distance[/bold]", f"[cyan]{real_dist_km:.2f} km[/cyan]")
+    summary_table.add_row(
         "[bold]ETA[/bold]", f"[magenta]{hh}h {mm}m[/magenta] @ {args.speed_kmh:.0f} km/h"
     )
-    summary.add_row("[bold]Solver[/bold]", alg)
-    console.print(Panel(summary, title="Summary", border_style="green", expand=False))
+    summary_table.add_row("[bold]Solver[/bold]", alg)
+
+    # Zeige die Route im Viewer
+    RouteViewer(console, map_art, instructions_content, summary_table, use_colors).display()
 
     # On packaged .exe (PyInstaller) started via Explorer (no extra args),
     # keep the window open unless user disables it. Also allow explicit --pause.
