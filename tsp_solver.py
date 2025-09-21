@@ -22,8 +22,8 @@ SLUG_OVERRIDES = {
 # Wizard UI (Alternate Screen)
 # ===============================
 
-def make_layout(step_idx: int, step_count: int, title: str, body, footer_note: str = "Enter = weiter, q = Abbruch"):
-    """Erzeuge dreigeteiltes Layout: Header, Body, Footer (ohne neue Farben)."""
+def make_layout(step_idx: int, step_count: int, title: str, body, footer_note: str = "Enter = continue, q = cancel"):
+    """Create three-part layout: Header, Body, Footer (without new colors)."""
     layout = Layout()
     layout.split(
         Layout(name="header", size=3),
@@ -38,7 +38,7 @@ def make_layout(step_idx: int, step_count: int, title: str, body, footer_note: s
 
 
 class Wizard:
-    """Seitenbasierter Eingabe-Controller mit sichtbarem Echo der Eingaben."""
+    """Page-based input controller with visible echo of inputs."""
 
     def __init__(self, console: Console, default_coords: dict, saved_base: tuple | None, speed_kmh: float):
         self.console = console
@@ -61,7 +61,7 @@ class Wizard:
         return Panel(t, border_style="green")
 
     def _ask(self, prompt_text: str) -> str:
-        # Eingabe sichtbar machen; im Live-Modus kurz stoppen und danach wieder starten
+        # Make input visible; in Live mode, briefly stop and then restart
         if self.live:
             try:
                 self.live.stop()
@@ -78,11 +78,14 @@ class Wizard:
         else:
             s = self.console.input(f"\n{prompt_text}\n> ").strip()
         if s.lower() == "q":
-            # Sofortiger Abbruch
-            raise SystemExit(0)
+            # Exit alternate screen and terminate program immediately
+            if self.live:
+                self.live.stop()
+            self.console.screen(False)  # Explicitly exit alternate screen
+            sys.exit(0)  # Force exit
         return s
 
-    def _render(self, idx: int, total: int, title: str, body, footer: str = "Enter = weiter, q = Abbruch"):
+    def _render(self, idx: int, total: int, title: str, body, footer: str = "Enter = continue, q = cancel"):
         layout = make_layout(idx, total, title, body, footer)
         if self.live:
             self.live.update(layout)
@@ -97,14 +100,14 @@ class Wizard:
         if not self.saved_base:
             self.use_saved_base = False
             return
-        title = "Gespeicherte Basis verwenden"
+        title = "Use Saved Base"
         sx, sy, smap = f"{self.saved_base[0]}", f"{self.saved_base[1]}", self.saved_base[2]
         t = Table.grid(padding=(0, 1))
-        t.add_row("Gefunden:", f"[bold]{sx}, {sy} in {smap}[/bold]")
+        t.add_row("Found:", f"[bold]{sx}, {sy} in {smap}[/bold]")
         body = Panel(t, border_style="cyan")
         self._render(idx, self.steps_total, title, body)
         val = self._ask("Use saved base coordinates? (Y/n): ")
-        self._render(idx, self.steps_total, title, self._echo("Antwort:", val or "Y"))
+        self._render(idx, self.steps_total, title, self._echo("Answer:", val or "Y"))
         self.use_saved_base = (val.strip().lower() in ("", "y", "yes"))
         if self.use_saved_base:
             self.base = (float(self.saved_base[0]), float(self.saved_base[1]))
@@ -112,7 +115,7 @@ class Wizard:
 
     def step_select_houses_and_base(self, idx: int):
         # Bekannte Häuser anzeigen
-        title = "Häuser auswählen"
+        title = "Select Houses"
         if self.default_coords:
             names = [name.title() for name in sorted(self.default_coords.keys())]
             col = Columns(names, equal=True, expand=True)
@@ -121,9 +124,9 @@ class Wizard:
             body = Panel("No known houses found. Please enter manually.", border_style="yellow")
         self._render(idx, self.steps_total, title, body)
 
-        # Auswahl der Häuser
+        # Selection of houses
         selection = self._ask("Enter the houses you wish to visit (comma‑separated), or 'all' for all known: ")
-        self._render(idx, self.steps_total, title, self._echo("Auswahl:", selection or "<none>"))
+        self._render(idx, self.steps_total, title, self._echo("Selection:", selection or "<none>"))
         if selection.strip().lower() == "all":
             houses_raw = list(self.default_coords.keys())
         else:
@@ -184,11 +187,11 @@ class Wizard:
 
     def step_confirm_base_map(self, idx: int):
         # Spätere Bestätigung (Originaltext): H/D
-        title = "Basis-Karte bestätigen"
+        title = "Confirm Base Map"
         body = Panel("Is your base in Hagga Basin (H) or Deep Desert (D)? Enter H or D: ", border_style="cyan")
         self._render(idx, self.steps_total, title, body)
         base_map_input = self._ask("Is your base in Hagga Basin (H) or Deep Desert (D)? Enter H or D: ")
-        self._render(idx, self.steps_total, title, self._echo("Antwort:", base_map_input))
+        self._render(idx, self.steps_total, title, self._echo("Answer:", base_map_input))
         self.base_map = "deep" if base_map_input.strip().lower().startswith("d") else "hagga"
 
     def run(self):
