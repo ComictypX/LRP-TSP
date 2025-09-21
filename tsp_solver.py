@@ -8,12 +8,212 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.columns import Columns
 from rich.progress import Progress
+from rich.live import Live
+from rich.layout import Layout
 
 # Overrides for special house slugs on dune.gaming.tools
 SLUG_OVERRIDES = {
     "spinnette": "spinette",
     "mikarrol": "mikkarol",
 }
+
+
+# ===============================
+# Wizard UI (Alternate Screen)
+# ===============================
+
+def make_layout(step_idx: int, step_count: int, title: str, body, footer_note: str = "Enter = weiter, q = Abbruch"):
+    """Erzeuge dreigeteiltes Layout: Header, Body, Footer (ohne neue Farben)."""
+    layout = Layout()
+    layout.split(
+        Layout(name="header", size=3),
+        Layout(name="body"),
+        Layout(name="footer", size=3),
+    )
+    header = Panel.fit(f"{title}  •  Schritt {step_idx}/{step_count}", title="LRP-TSP", border_style="cyan")
+    layout["header"].update(header)
+    layout["body"].update(body)
+    layout["footer"].update(Panel.fit(footer_note, border_style="cyan"))
+    return layout
+
+
+class Wizard:
+    """Seitenbasierter Eingabe-Controller mit sichtbarem Echo der Eingaben."""
+
+    def __init__(self, console: Console, default_coords: dict, saved_base: tuple | None, speed_kmh: float):
+        self.console = console
+        self.live: Live | None = None
+        self.steps_total = 0
+        self.default_coords = default_coords
+        self.saved_base = saved_base
+        self.speed_kmh = speed_kmh
+
+        # Ergebnisse
+        self.use_saved_base: bool = False
+        self.house_names: list[str] = []
+        self.coords: list[tuple[float, float]] = []
+        self.base: tuple[float, float] | None = None
+        self.base_map: str | None = None
+
+    def _echo(self, label: str, value: str) -> Panel:
+        t = Table.grid(padding=(0, 1))
+        t.add_row(label, f"[bold]{value}[/bold]")
+        return Panel(t, border_style="green")
+
+    def _ask(self, prompt_text: str) -> str:
+        # Eingabe sichtbar machen; im Live-Modus kurz stoppen und danach wieder starten
+        if self.live:
+            try:
+                self.live.stop()
+            except RuntimeError:
+                pass
+            try:
+                s = self.console.input(f"\n{prompt_text}\n> ").strip()
+            finally:
+                try:
+                    self.live.start()
+                    self.live.refresh()
+                except RuntimeError:
+                    pass
+        else:
+            s = self.console.input(f"\n{prompt_text}\n> ").strip()
+        if s.lower() == "q":
+            # Sofortiger Abbruch
+            raise SystemExit(0)
+        return s
+
+    def _render(self, idx: int, total: int, title: str, body, footer: str = "Enter = weiter, q = Abbruch"):
+        layout = make_layout(idx, total, title, body, footer)
+        if self.live:
+            self.live.update(layout)
+        else:
+            # Fallback (kein Alternate Screen): jeweils Seite ersetzen
+            if self.console.is_terminal:
+                self.console.clear()
+            self.console.print(layout)
+
+    # Schritte
+    def step_use_saved_base(self, idx: int):
+        if not self.saved_base:
+            self.use_saved_base = False
+            return
+        title = "Gespeicherte Basis verwenden"
+        sx, sy, smap = f"{self.saved_base[0]}", f"{self.saved_base[1]}", self.saved_base[2]
+        t = Table.grid(padding=(0, 1))
+        t.add_row("Gefunden:", f"[bold]{sx}, {sy} in {smap}[/bold]")
+        body = Panel(t, border_style="cyan")
+        self._render(idx, self.steps_total, title, body)
+        val = self._ask("Use saved base coordinates? (Y/n): ")
+        self._render(idx, self.steps_total, title, self._echo("Antwort:", val or "Y"))
+        self.use_saved_base = (val.strip().lower() in ("", "y", "yes"))
+        if self.use_saved_base:
+            self.base = (float(self.saved_base[0]), float(self.saved_base[1]))
+            self.base_map = "deep" if self.saved_base[2].lower().startswith("d") else "hagga"
+
+    def step_select_houses_and_base(self, idx: int):
+        # Bekannte Häuser anzeigen
+        title = "Häuser auswählen"
+        if self.default_coords:
+            names = [name.title() for name in sorted(self.default_coords.keys())]
+            col = Columns(names, equal=True, expand=True)
+            body = Panel(col, border_style="green")
+        else:
+            body = Panel("No known houses found. Please enter manually.", border_style="yellow")
+        self._render(idx, self.steps_total, title, body)
+
+        # Auswahl der Häuser
+        selection = self._ask("Enter the houses you wish to visit (comma‑separated), or 'all' for all known: ")
+        self._render(idx, self.steps_total, title, self._echo("Auswahl:", selection or "<none>"))
+        if selection.strip().lower() == "all":
+            houses_raw = list(self.default_coords.keys())
+        else:
+            houses_raw = [h.strip() for h in selection.split(",") if h.strip()]
+
+        # Koordinaten je Haus
+        self.house_names = []
+        self.coords = []
+
+        def parse_number(prompt: str) -> float:
+            while True:
+                s = self._ask(prompt)
+                s_norm = s.replace(",", ".")
+                try:
+                    val = float(s_norm)
+                    return val
+                except ValueError:
+                    self._render(idx, self.steps_total, title, Panel("[red]Coordinate must be numeric. Try again.[/red]", border_style="red"))
+
+        for h in houses_raw:
+            self.house_names.append(h)
+            key = h.lower()
+            if key in self.default_coords:
+                self.coords.append(self.default_coords[key])
+            else:
+                x_val = parse_number(f"Enter X‑coordinate for {h}: ")
+                self._render(idx, self.steps_total, title, self._echo(f"X for {h}:", f"{x_val}"))
+                y_val = parse_number(f"Enter Y‑coordinate for {h}: ")
+                self._render(idx, self.steps_total, title, self._echo(f"Y for {h}:", f"{y_val}"))
+                self.coords.append((x_val, y_val))
+
+        # Basis nur abfragen, wenn nicht gespeicherte benutzt wird
+        if not self.use_saved_base:
+            # Where is your base? (hagga/deep)
+            base_map_input = ""
+            while True:
+                base_map_input = self._ask("Where is your base? (hagga/deep): ").strip().lower()
+                self._render(idx, self.steps_total, title, self._echo("Base map:", base_map_input or ""))
+                if base_map_input in ["hagga", "deep"]:
+                    break
+                self._render(idx, self.steps_total, title, Panel("Please enter 'hagga' or 'deep'.", border_style="yellow"))
+
+            # Hinweise/Links wie im Original
+            if base_map_input == "hagga":
+                hint = Panel("[dim]  - Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin[/dim]")
+            elif base_map_input == "deep":
+                hint = Panel("[dim]  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert[/dim]")
+            else:
+                hint = Panel("[dim]  - Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin\n  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert[/dim]")
+            self._render(idx, self.steps_total, title, hint)
+
+            # Base Koordinaten
+            bx = parse_number("Enter your base X‑coordinate: ")
+            self._render(idx, self.steps_total, title, self._echo("Base X:", f"{bx}"))
+            by = parse_number("Enter your base Y‑coordinate: ")
+            self._render(idx, self.steps_total, title, self._echo("Base Y:", f"{by}"))
+            self.base = (bx, by)
+
+    def step_confirm_base_map(self, idx: int):
+        # Spätere Bestätigung (Originaltext): H/D
+        title = "Basis-Karte bestätigen"
+        body = Panel("Is your base in Hagga Basin (H) or Deep Desert (D)? Enter H or D: ", border_style="cyan")
+        self._render(idx, self.steps_total, title, body)
+        base_map_input = self._ask("Is your base in Hagga Basin (H) or Deep Desert (D)? Enter H or D: ")
+        self._render(idx, self.steps_total, title, self._echo("Antwort:", base_map_input))
+        self.base_map = "deep" if base_map_input.strip().lower().startswith("d") else "hagga"
+
+    def run(self):
+        # Reihenfolge gem. bestehender Fragen
+        steps = [self.step_use_saved_base, self.step_select_houses_and_base, self.step_confirm_base_map]
+        self.steps_total = len(steps)
+
+        if self.console.is_terminal:
+            with self.console.screen():
+                with Live(console=self.console, refresh_per_second=10, transient=False) as live:
+                    self.live = live
+                    for i, step in enumerate(steps, start=1):
+                        step(i)
+        else:
+            for i, step in enumerate(steps, start=1):
+                self.console.clear()
+                step(i)
+
+        return {
+            "use_saved_base": self.use_saved_base,
+            "house_names": self.house_names,
+            "coords": self.coords,
+            "base": self.base,
+            "base_map": self.base_map,
+        }
 
 
 def compute_distance(p1, p2):
@@ -651,13 +851,7 @@ def solve_route_with_ortools(base, base_map, points, exits, time_limit_s=5):
 
 def main():
     print("Landsraad Route Planner (LRP-TSP) — Optimal house route for Dune: Awakening")
-    """
-    Entry point for the modern Landsraad route planner.  It attempts
-    to prepopulate coordinates by loading a raw map file from the
-    current directory (``survival_1.4ef33d6dfe9b3fb6d1c945bc620551bc.raw``).
-    The user can then choose which houses to visit and will be
-    prompted for any missing coordinates along with their base location.
-    """
+    # Entry point for the modern Landsraad route planner.
     import argparse
 
     parser = argparse.ArgumentParser(description="Landsraad Route Planner")
@@ -702,7 +896,7 @@ def main():
 
         with open(frozen_path, "r", encoding="utf-8") as f:
             frozen = json.load(f)
-    except Exception as e:
+    except (OSError, ValueError) as e:
         print(f"Error reading {frozen_path}: {e}")
         return
     # Build coordinates from frozen data
@@ -734,7 +928,7 @@ def main():
                 cfgdir = os.path.join(base, "tsp-dune")
             os.makedirs(cfgdir, exist_ok=True)
             return os.path.join(cfgdir, ".tsp_config")
-        except Exception:
+        except (OSError, ValueError):
             # Fallback: in the script directory (may be temporary for .exe)
             return os.path.join(script_dir, ".tsp_config")
 
@@ -757,31 +951,16 @@ def main():
                 console.print(
                     f"[cyan]Saved base coordinates detected: {sx}, {sy} in {smap.title()}.[/cyan]"
                 )
-        except Exception:
+        except (OSError, ValueError):
             saved_base = None
-    # Decide whether to use saved base
-    use_saved_base = False
-    base = None
-    base_map = None
-    if saved_base:
-        resp = input("Use saved base coordinates? (Y/n): ").strip().lower()
-        if resp == "" or resp.startswith("y"):
-            use_saved_base = True
-            base = (saved_base[0], saved_base[1])
-            base_map = "deep" if saved_base[2].lower().startswith("d") else "hagga"
-            console.print(
-                f"[green]Using saved base: {base[0]}, {base[1]} in {saved_base[2].title()}.[/green]"
-            )
-    # gather user input (house names, their coordinates, base)
-    # If we use the saved base, skip prompting for base coordinates in the input function
-    house_names, coords, manual_base = get_user_input_coords(
-        default_coords, skip_base=use_saved_base, console=console, fancy=args.fancy_prompt
-    )
-    # Use the manual base if not using saved, otherwise keep saved base
-    if use_saved_base:
-        pass  # base is already set above
-    else:
-        base = manual_base
+    # Wizard: Eingaben seitenweise erfassen (Alternate Screen + sichtbarer Input)
+    wiz = Wizard(console, default_coords, saved_base, args.speed_kmh)
+    result = wiz.run()
+    use_saved_base = result["use_saved_base"]
+    house_names = result["house_names"]
+    coords = result["coords"]
+    base = result["base"] if not use_saved_base else (float(saved_base[0]), float(saved_base[1]))
+    base_map = result["base_map"] if result["base_map"] else ("deep" if (saved_base and saved_base[2].lower().startswith("d")) else "hagga")
 
     # Build mappings from JSON (map group + display)
     house_to_map_group = {}
@@ -822,7 +1001,7 @@ def main():
                     parts = line.split(",")
                     if len(parts) == 3:
                         old = (float(parts[0]), float(parts[1]), parts[2])
-            except Exception:
+            except (OSError, ValueError):
                 old = None
         # Determine whether coordinates or map changed compared with saved values
         need_save = False
@@ -841,7 +1020,7 @@ def main():
                     with open(config_path, "w", encoding="utf-8") as f:
                         f.write(f"{base[0]},{base[1]},{smap}\n")
                     console.print("[green]Base coordinates saved.[/green]")
-                except Exception:
+                except (OSError, ValueError):
                     console.print("[yellow]Warning: could not save base configuration.[/yellow]")
 
     # Normalise house maps and build a list of (name, coord, group, display)
@@ -958,7 +1137,11 @@ def main():
     if len(points) == 0:
         print("No houses selected. Route is trivial: stay at base.")
         return
-    with console.status("Solving route...", spinner="dots"):
+    try:
+        _status_cm = console.status("Solving route...", spinner="dots", transient=True)
+    except TypeError:
+        _status_cm = console.status("Solving route...", spinner="dots")
+    with _status_cm:
         if args.force_ortools:
             try:
                 route, _route_cost = solve_route_with_ortools(
@@ -984,6 +1167,9 @@ def main():
                 route, _route_cost = nearest_neighbour_route_map(base, base_map, points, exits)
                 alg = "approximate"
     # Display summary of the route (Rich)
+    # Single-Page Ausgabe der Ergebnisse
+    if console.is_terminal:
+        console.clear()
     console.rule(f"Computed route ({alg})")
     console.print(" -> ".join(["Base"] + route + ["Base"]), style="dim")
 
