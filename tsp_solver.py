@@ -2,6 +2,12 @@ import itertools
 import os
 import re
 import sys
+if sys.platform != "win32":
+    # Stelle sicher, dass _enter_cbreak/_leave_cbreak global sichtbar sind
+    try:
+        _enter_cbreak
+    except NameError:
+        pass
 
 from rich.console import Console
 from rich.markup import escape
@@ -13,7 +19,7 @@ from rich.live import Live
 from rich.layout import Layout
 from rich.align import Align
 
-# Cross-platform hotkey wrapper (kbhit, getch, getwch)
+# Cross-platform hotkey wrapper (CBreak/Raw-Mode, O_NONBLOCK for Unix, msvcrt for Windows)
 import sys
 if sys.platform == "win32":
     import msvcrt
@@ -24,15 +30,39 @@ if sys.platform == "win32":
     def getwch():
         return msvcrt.getwch()  # Gibt Unicode-Zeichen (str), aber für Konsistenz wie vorher
 else:
-    import select
-    import readchar
+    import select, termios, tty, os, fcntl
+    _fd = sys.stdin.fileno()
+    _old_term = None
+    _old_flags = None
+    def _enter_cbreak():
+        global _old_term, _old_flags
+        if not sys.stdin.isatty():
+            return
+        _old_term = termios.tcgetattr(_fd)
+        tty.setcbreak(_fd)
+        _old_flags = fcntl.fcntl(_fd, fcntl.F_GETFL)
+        fcntl.fcntl(_fd, fcntl.F_SETFL, _old_flags | os.O_NONBLOCK)
+    def _leave_cbreak():
+        global _old_term, _old_flags
+        if _old_term is None:
+            return
+        termios.tcsetattr(_fd, termios.TCSADRAIN, _old_term)
+        if _old_flags is not None:
+            fcntl.fcntl(_fd, fcntl.F_SETFL, _old_flags)
+        _old_term = None
+        _old_flags = None
+    globals()["_enter_cbreak"] = _enter_cbreak
+    globals()["_leave_cbreak"] = _leave_cbreak
     def kbhit():
         dr, _, _ = select.select([sys.stdin], [], [], 0)
         return bool(dr)
     def getch():
-        return readchar.readchar()
+        try:
+            return sys.stdin.read(1)
+        except (BlockingIOError, OSError, ValueError):
+            return ""
     def getwch():
-        return readchar.readchar()
+        return getch()
 
 # Overrides for special house slugs on dune.gaming.tools
 SLUG_OVERRIDES = {
@@ -69,17 +99,23 @@ def show_welcome_screen(console: Console):
             layout = make_layout(0, 0, title, body_panel, footer)
             live.update(layout)
             # Plattformunabhängige Eingabe
-            while True:
-                ch = getwch()
-                if ch in ("\x00", "\xe0") and sys.platform == "win32":
-                    _ = getwch()
-                    continue
-                if ch in ("\r", "\n"):
-                    break
-                if ch.lower() == "q":
-                    live.stop()
-                    console.screen(False)
-                    sys.exit(0)
+            if sys.platform != "win32":
+                _enter_cbreak()
+            try:
+                while True:
+                    ch = getwch()
+                    if ch in ("\x00", "\xe0") and sys.platform == "win32":
+                        _ = getwch()
+                        continue
+                    if ch in ("\r", "\n"):
+                        break
+                    if ch.lower() == "q":
+                        live.stop()
+                        console.screen(False)
+                        sys.exit(0)
+            finally:
+                if sys.platform != "win32":
+                    _leave_cbreak()
         finally:
             live.stop()
 
@@ -161,24 +197,37 @@ class Wizard:
             self.live.update(make_layout(idx, total, title, body, build_footer("")))
             self.live.refresh()
 
-            while True:
-                ch = getwch()
-                if ch in ("\x00", "\xe0") and sys.platform == "win32":
-                    _ = getwch()
-                    continue
-                if ch in ("\r", "\n"):
-                    s = "".join(buf).strip()
-                    break
-                if ch == "\x08":
-                    if buf:
-                        buf.pop()
-                elif ch == "\x1b":
-                    pass
-                else:
-                    if ch.isprintable():
-                        buf.append(ch)
-                self.live.update(make_layout(idx, total, title, body, build_footer(''.join(buf))))
-                self.live.refresh()
+            if sys.platform != "win32":
+                _enter_cbreak()
+            try:
+                while True:
+                    ch = getwch()
+                    if not ch:
+                        continue  # Leere Zeichen ignorieren
+                    if ch in ("\x00", "\xe0") and sys.platform == "win32":
+                        _ = getwch()
+                        continue
+                    if ch in ("\r", "\n"):
+                        s = "".join(buf).strip()
+                        break
+                    # Backspace: akzeptiere \x08 (Ctrl+H), \x7f (DEL), '\b', ''
+                    if ch in ("\x08", "\x7f", "\b"):
+                        if buf:
+                            buf.pop()
+                    elif ch == "\x1b":
+                        pass
+                    else:
+                        # Nur druckbare Zeichen anhängen
+                        try:
+                            if ch.isprintable():
+                                buf.append(ch)
+                        except Exception:
+                            pass
+                    self.live.update(make_layout(idx, total, title, body, build_footer(''.join(buf))))
+                    self.live.refresh()
+            finally:
+                if sys.platform != "win32":
+                    _leave_cbreak()
         else:
             # Fallback: klassisches Prompt
             s = input(f"{prompt_text}\n> ").strip()
@@ -371,53 +420,62 @@ class RouteViewer:
         if not self.renderables:
             return
         def _run(live: Live):
-            last_height = self.console.height
-            while True:
-                if abs(self.console.height - last_height) > 2:
-                    self._build_renderables()
-                    last_height = self.console.height
-                    if self.current_index >= len(self.renderables):
-                        self.current_index = len(self.renderables) - 1
+            exit_cbreak = (sys.platform != "win32")
+            if exit_cbreak:
+                _enter_cbreak()
+            try:
+                last_height = self.console.height
+                while True:
+                    if abs(self.console.height - last_height) > 2:
+                        self._build_renderables()
+                        last_height = self.console.height
+                        if self.current_index >= len(self.renderables):
+                            self.current_index = len(self.renderables) - 1
 
-                legend_panel = Panel(
-                    "[dim]Legend: [turquoise2]Hagga Basin[/], [gold3]Deep Desert[/], [green3]Arrakeen[/], [dark_red]Harko Village[/][/dim]",
-                    border_style="cyan"
-                ) if self.use_colors else Panel("", border_style="cyan")
-                hotkeys_panel = Panel("←/→ Navigate, q = Quit", border_style="cyan")
-                footer = Columns([hotkeys_panel, legend_panel], equal=True)
+                    legend_panel = Panel(
+                        "[dim]Legend: [turquoise2]Hagga Basin[/], [gold3]Deep Desert[/], [green3]Arrakeen[/], [dark_red]Harko Village[/][/dim]",
+                        border_style="cyan"
+                    ) if self.use_colors else Panel("", border_style="cyan")
+                    hotkeys_panel = Panel("←/→ Navigate, q = Quit", border_style="cyan")
+                    footer = Columns([hotkeys_panel, legend_panel], equal=True)
 
-                layout = Layout()
-                layout.split(
-                    Layout(name="header", size=3),
-                    Layout(name="body"),
-                    Layout(name="footer", size=5),
-                )
-                header = Panel.fit(f"Route Display  •  Page {self.current_index + 1}/{len(self.renderables)}", title="LRP-TSP", border_style="cyan")
-                layout["header"].update(header)
-                layout["body"].update(self.renderables[self.current_index])
-                layout["footer"].update(footer)
+                    layout = Layout()
+                    layout.split(
+                        Layout(name="header", size=3),
+                        Layout(name="body"),
+                        Layout(name="footer", size=5),
+                    )
+                    header = Panel.fit(f"Route Display  •  Page {self.current_index + 1}/{len(self.renderables)}", title="LRP-TSP", border_style="cyan")
+                    layout["header"].update(header)
+                    layout["body"].update(self.renderables[self.current_index])
+                    layout["footer"].update(footer)
 
-                live.update(layout)
+                    live.update(layout)
 
-                if kbhit():
-                    key = getch()
-                    # Windows: Bytes, Unix: str
-                    if (sys.platform == "win32" and key in (b'q', b'Q')) or (sys.platform != "win32" and key in ("q", "Q")):
-                        break
-                    if sys.platform == "win32":
-                        if key == b'\xe0':
-                            key2 = getch()
-                            if key2 == b'K':
-                                self.current_index = max(0, self.current_index - 1)
-                            elif key2 == b'M':
-                                self.current_index = min(len(self.renderables) - 1, self.current_index + 1)
-                    else:
-                        if key == '\x1b':
-                            seq = key + getch() + getch()
-                            if seq in ("\x1b[D", "\x1bOD"):  # Left
-                                self.current_index = max(0, self.current_index - 1)
-                            elif seq in ("\x1b[C", "\x1bOC"):  # Right
-                                self.current_index = min(len(self.renderables) - 1, self.current_index + 1)
+                    if kbhit():
+                        key = getch()
+                        if key in ("q", "Q", b"q", b"Q"):
+                            break
+                        if sys.platform == "win32":
+                            if key == b'\xe0':
+                                key2 = getch()
+                                if key2 == b'K':
+                                    self.current_index = max(0, self.current_index - 1)
+                                elif key2 == b'M':
+                                    self.current_index = min(len(self.renderables) - 1, self.current_index + 1)
+                        else:
+                            if key == "\x1b":
+                                second = getch()
+                                if second in ("[", "O"):
+                                    third = getch()
+                                    seq = "\x1b" + (second or "") + (third or "")
+                                    if seq in ("\x1b[D", "\x1bOD"):  # Left
+                                        self.current_index = max(0, self.current_index - 1)
+                                    elif seq in ("\x1b[C", "\x1bOC"):  # Right
+                                        self.current_index = min(len(self.renderables) - 1, self.current_index + 1)
+            finally:
+                if exit_cbreak:
+                    _leave_cbreak()
 
         if within_screen:
             live = Live(console=self.console, refresh_per_second=4, transient=False)
