@@ -20,9 +20,9 @@ if sys.platform == "win32":
     def kbhit():
         return msvcrt.kbhit()
     def getch():
-        return msvcrt.getch().decode(errors="ignore")
+        return msvcrt.getch()  # Bytes wie im Original
     def getwch():
-        return msvcrt.getwch()
+        return msvcrt.getwch()  # Gibt Unicode-Zeichen (str), aber für Konsistenz wie vorher
 else:
     import select
     import readchar
@@ -401,15 +401,15 @@ class RouteViewer:
 
                 if kbhit():
                     key = getch()
-                    if key in ("q", "Q"):
+                    # Windows: Bytes, Unix: str
+                    if (sys.platform == "win32" and key in (b'q', b'Q')) or (sys.platform != "win32" and key in ("q", "Q")):
                         break
-                    # Windows: Pfeiltasten als '\xe0' + 'K'/'M', Unix: '\x1b[A', '\x1b[C', ...
                     if sys.platform == "win32":
-                        if key == '\xe0':
+                        if key == b'\xe0':
                             key2 = getch()
-                            if key2 == 'K':
+                            if key2 == b'K':
                                 self.current_index = max(0, self.current_index - 1)
-                            elif key2 == 'M':
+                            elif key2 == b'M':
                                 self.current_index = min(len(self.renderables) - 1, self.current_index + 1)
                     else:
                         if key == '\x1b':
