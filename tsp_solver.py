@@ -10,6 +10,7 @@ from rich.columns import Columns
 from rich.progress import Progress
 from rich.live import Live
 from rich.layout import Layout
+from rich.align import Align
 
 # Für Hotkeys in Route-Anzeige
 import msvcrt
@@ -25,18 +26,62 @@ SLUG_OVERRIDES = {
 # Wizard UI (Alternate Screen)
 # ===============================
 
-def make_layout(step_idx: int, step_count: int, title: str, body, footer_note: str = "Enter = continue, q = cancel"):
+def show_welcome_screen(console: Console):
+    """Display a compact welcome screen with instructions before the wizard."""
+    title = "Welcome"
+    body_table = Table.grid(padding=(0, 1))
+    body_table.add_row(
+        "Landsraad Route Planner",
+        "Plan your optimal visit order across maps in Dune: Awakening.",
+    )
+    body_table.add_row(
+        "What you'll do:",
+        "Select houses to visit, set your base, and let the solver compute the route.",
+    )
+    body_panel = Panel(body_table, border_style="green")
+    # Footer: unified hotkeys (no legend on welcome), minimal width and left-aligned
+    hotkeys_panel = Panel.fit("Enter = Continue, q = Quit", border_style="cyan")
+    footer = Align.left(hotkeys_panel)
+
+    with console.screen():
+        live = Live(console=console, refresh_per_second=10, transient=False)
+        live.start()
+        try:
+            layout = make_layout(0, 0, title, body_panel, footer)
+            live.update(layout)
+            # Wait for Enter or 'q'
+            while True:
+                ch = msvcrt.getwch()
+                if ch in ("\x00", "\xe0"):
+                    _ = msvcrt.getwch()
+                    continue
+                if ch in ("\r", "\n"):
+                    break
+                if ch.lower() == "q":
+                    live.stop()
+                    console.screen(False)
+                    sys.exit(0)
+        finally:
+            live.stop()
+
+def make_layout(step_idx: int, step_count: int, title: str, body, footer_note: str | object = "Enter = continue, q = cancel"):
     """Create three-part layout: Header, Body, Footer (without new colors)."""
     layout = Layout()
     layout.split(
         Layout(name="header", size=3),
         Layout(name="body"),
-        Layout(name="footer", size=3),
+        Layout(name="footer", size=8),
     )
-    header = Panel.fit(f"{title}  •  Schritt {step_idx}/{step_count}", title="LRP-TSP", border_style="cyan")
+    # English header text; hide step counter if not applicable
+    step_suffix = f"  •  Step {step_idx}/{step_count}" if (step_count and step_count > 0) else ""
+    header = Panel.fit(f"{title}{step_suffix}", title="LRP-TSP", border_style="cyan")
     layout["header"].update(header)
     layout["body"].update(body)
-    layout["footer"].update(Panel.fit(footer_note, border_style="cyan"))
+    # Accept either a simple string or a full renderable for the footer
+    if isinstance(footer_note, str):
+        layout["footer"].update(Panel.fit(footer_note, border_style="cyan"))
+    else:
+        layout["footer"].update(footer_note)
     return layout
 
 
@@ -57,6 +102,11 @@ class Wizard:
         self.coords: list[tuple[float, float]] = []
         self.base: tuple[float, float] | None = None
         self.base_map: str | None = None
+        # Kontext für Inline-Input in _ask (vermeidet Linter-Warnungen)
+        self._current_idx: int = 0
+        self._current_total: int = 0
+        self._current_title: str = ""
+        self._current_body = Panel("")
 
     def _echo(self, label: str, value: str) -> Panel:
         t = Table.grid(padding=(0, 1))
@@ -64,20 +114,61 @@ class Wizard:
         return Panel(t, border_style="green")
 
     def _ask(self, prompt_text: str) -> str:
-        # Make input visible; in Live mode, briefly stop and then restart
+        # Custom input inside Live so header/body stay fixed
         if self.live:
-            try:
-                self.live.stop()
-            except RuntimeError:
-                pass
-            try:
-                s = self.console.input(f"\n{prompt_text}\n> ").strip()
-            finally:
-                try:
-                    self.live.start()
-                    self.live.refresh()
-                except RuntimeError:
+            buf: list[str] = []
+            # Ensure we have some context from last render
+            idx = getattr(self, "_current_idx", 1)
+            total = getattr(self, "_current_total", 1)
+            title = getattr(self, "_current_title", "")
+            body = getattr(self, "_current_body", Panel(""))
+
+            # Helper to build a compact footer: side-by-side prompt and input with fixed widths
+            def build_footer(current_text: str):
+                term_w = max(60, self.console.width)
+                # Reserve some space for borders/padding; split ~60/40
+                left_w = int(term_w * 0.6)
+                right_w = term_w - left_w - 8
+                # Enforce sensible minima
+                if right_w < 18:
+                    shift = 18 - right_w
+                    left_w = max(24, left_w - shift)
+                    right_w = 18
+                prompt_panel = Panel(prompt_text, border_style="cyan", width=left_w)
+                input_panel = Panel("> " + current_text, border_style="cyan", width=right_w)
+                lr_cols = Columns([prompt_panel, input_panel], equal=False, expand=True)
+                hotkeys_panel = Panel.fit("Enter = Continue, q = Cancel", border_style="cyan")
+                footer_grid = Table.grid(expand=True)
+                footer_grid.add_row(lr_cols)
+                footer_grid.add_row(Align.left(hotkeys_panel))
+                return footer_grid
+
+            # Initial paint: prompt and input in separate boxes, plus hotkeys row (no legend here)
+            self.live.update(make_layout(idx, total, title, body, build_footer("")))
+            self.live.refresh()
+
+            while True:
+                ch = msvcrt.getwch()
+                # Handle special key prefixes (arrows, etc.)
+                if ch in ("\x00", "\xe0"):
+                    # consume the next code and ignore
+                    _ = msvcrt.getwch()
+                    continue
+                if ch in ("\r", "\n"):
+                    s = "".join(buf).strip()
+                    break
+                if ch == "\x08":  # backspace
+                    if buf:
+                        buf.pop()
+                elif ch == "\x1b":  # ESC -> ignore (use 'q' to cancel)
                     pass
+                else:
+                    # Append printable characters only
+                    if ch.isprintable():
+                        buf.append(ch)
+                # Update footer with current buffer in right-hand box
+                self.live.update(make_layout(idx, total, title, body, build_footer(''.join(buf))))
+                self.live.refresh()
         else:
             s = self.console.input(f"\n{prompt_text}\n> ").strip()
         if s.lower() == "q":
@@ -89,6 +180,11 @@ class Wizard:
         return s
 
     def _render(self, idx: int, total: int, title: str, body, footer: str = "Enter = continue, q = cancel"):
+        # Store current context so _ask can rebuild layout while typing
+        self._current_idx = idx
+        self._current_total = total
+        self._current_title = title
+        self._current_body = body
         layout = make_layout(idx, total, title, body, footer)
         if self.live:
             self.live.update(layout)
@@ -117,8 +213,8 @@ class Wizard:
             self.base_map = "deep" if self.saved_base[2].lower().startswith("d") else "hagga"
 
     def step_select_houses_and_base(self, idx: int):
-        # Bekannte Häuser anzeigen
         title = "Select Houses"
+        # Show known houses
         if self.default_coords:
             names = [name.title() for name in sorted(self.default_coords.keys())]
             col = Columns(names, equal=True, expand=True)
@@ -135,35 +231,33 @@ class Wizard:
         else:
             houses_raw = [h.strip() for h in selection.split(",") if h.strip()]
 
-        # Koordinaten je Haus
+        # Collect coordinates for each selected house
         self.house_names = []
         self.coords = []
 
-        def parse_number(prompt: str) -> float:
+        def parse_number_local(prompt: str) -> float:
             while True:
-                s = self._ask(prompt)
-                s_norm = s.replace(",", ".")
+                val = self._ask(prompt).replace(",", ".").strip()
+                self._render(idx, self.steps_total, title, self._echo(prompt, val))
                 try:
-                    val = float(s_norm)
-                    return val
+                    return float(val)
                 except ValueError:
-                    self._render(idx, self.steps_total, title, Panel("[red]Coordinate must be numeric. Try again.[/red]", border_style="red"))
+                    self._render(idx, self.steps_total, title, Panel("Please enter a numeric value.", border_style="yellow"))
 
         for h in houses_raw:
             self.house_names.append(h)
             key = h.lower()
             if key in self.default_coords:
-                self.coords.append(self.default_coords[key])
+                x, y = self.default_coords[key]
+                self.coords.append((float(x), float(y)))
+                self._render(idx, self.steps_total, title, self._echo(h.title(), f"{x}, {y}"))
             else:
-                x_val = parse_number(f"Enter X‑coordinate for {h}: ")
-                self._render(idx, self.steps_total, title, self._echo(f"X for {h}:", f"{x_val}"))
-                y_val = parse_number(f"Enter Y‑coordinate for {h}: ")
-                self._render(idx, self.steps_total, title, self._echo(f"Y for {h}:", f"{y_val}"))
-                self.coords.append((x_val, y_val))
+                x = parse_number_local(f"Enter X‑coordinate for {h}: ")
+                y = parse_number_local(f"Enter Y‑coordinate for {h}: ")
+                self.coords.append((x, y))
 
-        # Basis nur abfragen, wenn nicht gespeicherte benutzt wird
+        # Ask for base if not using saved
         if not self.use_saved_base:
-            # Where is your base? (hagga/deep)
             base_map_input = ""
             while True:
                 base_map_input = self._ask("Where is your base? (hagga/deep): ").strip().lower()
@@ -171,20 +265,18 @@ class Wizard:
                 if base_map_input in ["hagga", "deep"]:
                     break
                 self._render(idx, self.steps_total, title, Panel("Please enter 'hagga' or 'deep'.", border_style="yellow"))
+            self.base_map = base_map_input
 
-            # Hinweise/Links wie im Original
+            # Show quick links
             if base_map_input == "hagga":
                 hint = Panel("[dim]  - Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin[/dim]")
-            elif base_map_input == "deep":
-                hint = Panel("[dim]  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert[/dim]")
             else:
-                hint = Panel("[dim]  - Hagga: https://duneawakening.th.gl/maps/Hagga%20Basin\n  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert[/dim]")
+                hint = Panel("[dim]  - Deep Desert: https://duneawakening.th.gl/maps/The%20Deep%20Desert[/dim]")
             self._render(idx, self.steps_total, title, hint)
 
-            # Base Koordinaten
-            bx = parse_number("Enter your base X‑coordinate: ")
+            bx = parse_number_local("Enter your base X‑coordinate: ")
             self._render(idx, self.steps_total, title, self._echo("Base X:", f"{bx}"))
-            by = parse_number("Enter your base Y‑coordinate: ")
+            by = parse_number_local("Enter your base Y‑coordinate: ")
             self._render(idx, self.steps_total, title, self._echo("Base Y:", f"{by}"))
             self.base = (bx, by)
 
@@ -255,7 +347,7 @@ class RouteViewer:
                 part_lines = lines[i:i + body_height]
                 parts.append('\n'.join(part_lines))
             for i, part in enumerate(parts):
-                title = "Route Instructions" if i == 0 else f"Route Instructions (Seite {i+1})"
+                title = "Route Instructions" if i == 0 else f"Route Instructions (Page {i+1})"
                 self.renderables.append(Panel(part, title=title, border_style="cyan"))
         else:
             self.renderables.append(Panel(self.instructions_content, title="Route Instructions", border_style="cyan"))
@@ -263,66 +355,75 @@ class RouteViewer:
         # Summary
         self.renderables.append(Panel(self.summary_table, title="Summary", border_style="green", expand=False))
 
-    def display(self):
+    def display(self, within_screen: bool = False):
         """Zeige die Route mit Navigation."""
         self._build_renderables()
         if not self.renderables:
             return
-
-        with self.console.screen():
-            live = Live(console=self.console, refresh_per_second=4, transient=False)  # Niedrigere Rate
-            live.start()
+        def _run(live: Live):
             last_height = self.console.height
-            try:
-                while True:
-                    # Prüfe auf signifikante Größenänderung (mehr als 2 Zeilen)
-                    if abs(self.console.height - last_height) > 2:
-                        self._build_renderables()
-                        last_height = self.console.height
-                        # Reset index if out of bounds
-                        if self.current_index >= len(self.renderables):
-                            self.current_index = len(self.renderables) - 1
+            while True:
+                # Prüfe auf signifikante Größenänderung (mehr als 2 Zeilen)
+                if abs(self.console.height - last_height) > 2:
+                    self._build_renderables()
+                    last_height = self.console.height
+                    # Reset index if out of bounds
+                    if self.current_index >= len(self.renderables):
+                        self.current_index = len(self.renderables) - 1
 
-                    legend_panel = Panel(
-                        "[dim]Legend: [turquoise2]Hagga Basin[/], [gold3]Deep Desert[/], [green3]Arrakeen[/], [dark_red]Harko Village[/][/dim]",
-                        border_style="cyan"
-                    ) if self.use_colors else Panel("", border_style="cyan")
-                    hotkeys_panel = Panel("←/→ Navigate, q = Quit", border_style="cyan")
-                    footer = Columns([hotkeys_panel, legend_panel], equal=True)
-                    
-                    layout = Layout()
-                    layout.split(
-                        Layout(name="header", size=3),
-                        Layout(name="body"),
-                        Layout(name="footer", size=5),
-                    )
-                    header = Panel.fit(f"Route Display  •  Page {self.current_index + 1}/{len(self.renderables)}", title="LRP-TSP", border_style="cyan")
-                    layout["header"].update(header)
-                    layout["body"].update(self.renderables[self.current_index])
-                    layout["footer"].update(footer)
-                    
-                    live.update(layout)
+                legend_panel = Panel(
+                    "[dim]Legend: [turquoise2]Hagga Basin[/], [gold3]Deep Desert[/], [green3]Arrakeen[/], [dark_red]Harko Village[/][/dim]",
+                    border_style="cyan"
+                ) if self.use_colors else Panel("", border_style="cyan")
+                hotkeys_panel = Panel("←/→ Navigate, q = Quit", border_style="cyan")
+                footer = Columns([hotkeys_panel, legend_panel], equal=True)
 
-                    # Warte auf Eingabe
-                    import msvcrt
-                    if msvcrt.kbhit():
+                layout = Layout()
+                layout.split(
+                    Layout(name="header", size=3),
+                    Layout(name="body"),
+                    Layout(name="footer", size=5),
+                )
+                header = Panel.fit(f"Route Display  •  Page {self.current_index + 1}/{len(self.renderables)}", title="LRP-TSP", border_style="cyan")
+                layout["header"].update(header)
+                layout["body"].update(self.renderables[self.current_index])
+                layout["footer"].update(footer)
+
+                live.update(layout)
+
+                # Warte auf Eingabe
+                if msvcrt.kbhit():
+                    key = msvcrt.getch()
+                    if key in (b'q', b'Q'):
+                        break
+                    elif key == b'\xe0':  # Pfeiltaste Präfix
                         key = msvcrt.getch()
-                        if key == b'q' or key == b'Q':
-                            break
-                        elif key == b'\xe0':  # Pfeiltaste Präfix
-                            key = msvcrt.getch()
-                            if key == b'K':  # Links
-                                self.current_index = max(0, self.current_index - 1)
-                            elif key == b'M':  # Rechts
-                                self.current_index = min(len(self.renderables) - 1, self.current_index + 1)
-                        elif key == b'\x00':  # Andere Spezialtasten
-                            key = msvcrt.getch()
-                            if key == b'K':  # Links (alternative)
-                                self.current_index = max(0, self.current_index - 1)
-                            elif key == b'M':  # Rechts (alternative)
-                                self.current_index = min(len(self.renderables) - 1, self.current_index + 1)
+                        if key == b'K':  # Links
+                            self.current_index = max(0, self.current_index - 1)
+                        elif key == b'M':  # Rechts
+                            self.current_index = min(len(self.renderables) - 1, self.current_index + 1)
+                    elif key == b'\x00':  # Andere Spezialtasten
+                        key = msvcrt.getch()
+                        if key == b'K':  # Links (alternative)
+                            self.current_index = max(0, self.current_index - 1)
+                        elif key == b'M':  # Rechts (alternative)
+                            self.current_index = min(len(self.renderables) - 1, self.current_index + 1)
+
+        if within_screen:
+            live = Live(console=self.console, refresh_per_second=4, transient=False)
+            live.start()
+            try:
+                _run(live)
             finally:
                 live.stop()
+        else:
+            with self.console.screen():
+                live = Live(console=self.console, refresh_per_second=4, transient=False)
+                live.start()
+                try:
+                    _run(live)
+                finally:
+                    live.stop()
 
 
 def compute_distance(p1, p2):
@@ -528,7 +629,7 @@ def get_user_input_coords(default_coords, skip_base=False, console=None, fancy=F
                 # map back to raw keys
                 inv = dict(zip(choices_display, choices))
                 houses_raw = [inv[p] for p in picked]
-        except Exception:
+        except (ImportError, AttributeError):
             houses_raw = None
     if houses_raw is None:
         selection = input(
@@ -584,7 +685,7 @@ def get_user_input_coords(default_coords, skip_base=False, console=None, fancy=F
                     ],
                 ).ask()
                 base_map = base_map_choice
-            except Exception:
+            except (ImportError, AttributeError):
                 base_map = None
         if base_map is None:
             # enforce a valid answer
@@ -829,26 +930,8 @@ def nearest_neighbour_route(base, points):
 
 def nearest_neighbour_no_return(start_point, points):
     """
-    Greedy nearest‑neighbour path that starts at ``start_point`` and
-    visits all given ``points`` exactly once without returning to the
-    start.  Returns the visit order, the distance travelled and the
-    coordinates of the final point.
-
-    Parameters
-    ----------
-    start_point : tuple
-        The (x, y) coordinates of the starting location.
-    points : list of tuples
-        A list of (house_name, (x, y)) entries.
-
-    Returns
-    -------
-    route : list[str]
-        The sequence of house names in the order they are visited.
-    total_dist : float
-        The total distance travelled from start to last point.
-    last_coord : tuple
-        The coordinates of the last visited point.
+    Greedy nearest‑neighbour path that starts at start_point and visits all points once
+    without returning to the start. Returns (route, total_dist, last_coord).
     """
     if not points:
         return [], 0.0, start_point
@@ -903,7 +986,7 @@ def solve_route_with_ortools(base, base_map, points, exits, time_limit_s=5):
         cs = importlib.import_module("ortools.constraint_solver")
         pywrapcp = cs.pywrapcp
         routing_enums_pb2 = cs.routing_enums_pb2
-    except Exception as e:
+    except Exception as e:  # noqa: E722 - propagate import failure with helpful message
         raise ImportError("OR-Tools is not installed") from e
 
     names = ["Base"] + [p[0] for p in points]
@@ -962,6 +1045,8 @@ def main():
     print("Landsraad Route Planner (LRP-TSP) — Optimal house route for Dune: Awakening")
     # Entry point for the modern Landsraad route planner.
     import argparse
+    import threading
+    import time
 
     parser = argparse.ArgumentParser(description="Landsraad Route Planner")
     parser.add_argument(
@@ -990,6 +1075,8 @@ def main():
     console = Console()
     console.rule("Landsraad Representative Route Planner")
     console.print("[dim]Plan your optimal visit order across maps.[/dim]")
+    # Show a small welcome screen before starting the wizard
+    show_welcome_screen(console)
     # Load frozen data only (no dependency on .raw files)
     script_dir = os.path.dirname(os.path.abspath(__file__))
     default_coords = {}
@@ -1242,45 +1329,67 @@ def main():
         for h, info in frozen["houses"].items():
             if "x" in info and "y" in info:
                 default_coords[h] = (info["x"], info["y"])
-    # Choose algorithm with optional override (with status spinner)
+    # Choose algorithm with optional override (show a full-screen spinner)
     if len(points) == 0:
         print("No houses selected. Route is trivial: stay at base.")
         return
-    try:
-        _status_cm = console.status("Solving route...", spinner="dots", transient=True)
-    except TypeError:
-        _status_cm = console.status("Solving route...", spinner="dots")
-    with _status_cm:
-        if args.force_ortools:
-            try:
-                route, _route_cost = solve_route_with_ortools(
-                    base, base_map, points, exits, time_limit_s=5
-                )
-                alg = "OR-Tools (GLS, forced)"
-            except Exception:
-                console.print(
-                    "[yellow]OR-Tools unavailable or failed. Falling back to optimal solver.[/yellow]"
-                )
-                route, _route_cost = find_shortest_route(base, base_map, points, exits)
-                alg = "optimal (Fallback)"
-        elif len(points) <= 10:
-            route, _route_cost = find_shortest_route(base, base_map, points, exits)
-            alg = "optimal"
-        else:
-            try:
-                route, _route_cost = solve_route_with_ortools(
-                    base, base_map, points, exits, time_limit_s=5
-                )
-                alg = "OR-Tools (GLS)"
-            except Exception:
-                route, _route_cost = nearest_neighbour_route_map(base, base_map, points, exits)
-                alg = "approximate"
-    # Display summary of the route (Rich)
-    # Single-Page Ausgabe der Ergebnisse
-    if console.is_terminal:
-        console.clear()
-    console.rule(f"Computed route ({alg})")
-    console.print(" -> ".join(["Base"] + route + ["Base"]), style="dim")
+    # Solve in a background thread while rendering a Live spinner inside an alternate screen
+    result: dict = {}
+    error: dict = {}
+
+    def _solve():
+        try:
+            if args.force_ortools:
+                try:
+                    r, _ = solve_route_with_ortools(base, base_map, points, exits, time_limit_s=5)
+                    a = "OR-Tools (GLS, forced)"
+                except (RuntimeError, ValueError, ImportError):
+                    console.print(
+                        "[yellow]OR-Tools unavailable or failed. Falling back to optimal solver.[/yellow]"
+                    )
+                    r, _ = find_shortest_route(base, base_map, points, exits)
+                    a = "optimal (Fallback)"
+            elif len(points) <= 10:
+                r, _ = find_shortest_route(base, base_map, points, exits)
+                a = "optimal"
+            else:
+                try:
+                    r, _ = solve_route_with_ortools(base, base_map, points, exits, time_limit_s=5)
+                    a = "OR-Tools (GLS)"
+                except (RuntimeError, ValueError, ImportError):
+                    r, _ = nearest_neighbour_route_map(base, base_map, points, exits)
+                    a = "approximate"
+            result["route"] = r
+            result["alg"] = a
+        except (RuntimeError, ValueError, ImportError) as e:
+            error["exc"] = e
+
+    th = threading.Thread(target=_solve, daemon=True)
+    th.start()
+
+    # Render a compact full-screen spinner page until the thread completes,
+    # then seamlessly transition to the viewer within the SAME alternate screen.
+    from rich.spinner import Spinner
+
+    with console.screen():
+        live = Live(console=console, refresh_per_second=12, transient=False)
+        live.start()
+        try:
+            while th.is_alive():
+                spin = Spinner("dots", text="Solving route… Please wait")
+                body = Panel(Align.center(spin, vertical="middle"), border_style="cyan")
+                footer = Align.left(Panel.fit("Working…", border_style="cyan"))
+                layout = make_layout(0, 0, "Solving Route", body, footer)
+                live.update(layout, refresh=True)
+                time.sleep(0.08)
+            th.join()
+            if error.get("exc"):
+                raise error["exc"]
+        finally:
+            live.stop()
+
+        route = result.get("route", [])
+        alg = result.get("alg", "unknown")
 
     # Build lookup tables for map group, display name and coordinates.  These
     # are used both for computing human‑readable distances and for
@@ -1458,8 +1567,8 @@ def main():
 
             # Route als Linie/Pfeile einzeichnen
             for i in range(len(pts) - 1):
-                (name1, (px1, py1)) = pts[i]
-                (name2, (px2, py2)) = pts[i + 1]
+                (_, (px1, py1)) = pts[i]
+                (_, (px2, py2)) = pts[i + 1]
                 x1, y1 = project((px1, py1))
                 x2, y2 = project((px2, py2))
                 dx = x2 - x1
@@ -1505,7 +1614,7 @@ def main():
                             grid[yi][xi] = line
 
             map_art = "\n".join("".join(row) for row in grid)
-        except Exception:
+        except (ValueError, IndexError):
             map_art = "[yellow]ASCII map rendering failed.[/yellow]"
 
     # Prepare detailed route instructions.  We track the current map, the
@@ -1632,15 +1741,15 @@ def main():
     )
     summary_table.add_row("[bold]Solver[/bold]", alg)
 
-    # Zeige die Route im Viewer
-    RouteViewer(console, map_art, instructions_content, summary_table, use_colors).display()
+    # Zeige die Route im Viewer (weiterhin innerhalb des geöffneten Alternate Screens)
+    RouteViewer(console, map_art, instructions_content, summary_table, use_colors).display(within_screen=True)
 
     # On packaged .exe (PyInstaller) started via Explorer (no extra args),
     # keep the window open unless user disables it. Also allow explicit --pause.
     try:
         if args.pause or (getattr(sys, "frozen", False) and len(sys.argv) <= 1):
             input("Press Enter to exit…")
-    except Exception:
+    except (EOFError, KeyboardInterrupt, OSError):
         pass
 
 
