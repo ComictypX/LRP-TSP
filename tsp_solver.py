@@ -64,6 +64,16 @@ else:
     def getwch():
         return getch()
 
+# Patch: ensure _leave_cbreak is always defined (for Windows, as no-op)
+if sys.platform == "win32":
+    def _leave_cbreak():
+        pass
+
+# Patch: ensure _enter_cbreak is always defined (for Windows, as no-op)
+if sys.platform == "win32":
+    def _enter_cbreak():
+        pass
+
 # Overrides for special house slugs on dune.gaming.tools
 SLUG_OVERRIDES = {
     "spinnette": "spinette",
@@ -89,7 +99,7 @@ def show_welcome_screen(console: Console):
     )
     body_panel = Panel(body_table, border_style="green")
     # Footer: unified hotkeys (no legend on welcome), minimal width and left-aligned
-    hotkeys_panel = Panel.fit("Enter = Continue, q = Quit", border_style="cyan")
+    hotkeys_panel = Panel.fit("Enter = continue, q = quit", border_style="cyan")
     footer = Align.left(hotkeys_panel)
 
     with console.screen():
@@ -428,23 +438,25 @@ class RouteViewer:
             try:
                 last_height = self.console.height
                 last_index = -1
-                # Statische Panels nur einmal bauen
-                legend_panel = Panel(
-                    "[dim]Legend: [turquoise2]Hagga Basin[/], [gold3]Deep Desert[/], [green3]Arrakeen[/], [dark_red]Harko Village[/][/dim]",
-                    border_style="cyan"
-                ) if self.use_colors else Panel("", border_style="cyan")
-                hotkeys_panel = Panel("←/→ Navigate, q = Quit", border_style="cyan")
-                footer = Columns([hotkeys_panel, legend_panel], equal=True)
+                # Compact hotkey legend
+                hotkeys_panel = Panel.fit("←/→ = navigate, q = quit", border_style="cyan")
+                # Optionally show color legend if enough space
+                legend_text = "[dim]Legend: [turquoise2]Hagga Basin[/], [gold3]Deep Desert[/], [green3]Arrakeen[/], [dark_red]Harko Village[/][/dim]" if self.use_colors else ""
+                show_legend = self.console.width > 90 and legend_text
                 layout = Layout()
                 layout.split(
                     Layout(name="header", size=3),
                     Layout(name="body"),
-                    Layout(name="footer", size=5),
+                    Layout(name="footer", size=3 if not show_legend else 5),
                 )
-                # Initial Header/Body/Footer setzen
                 header = Panel.fit(f"Route Display  •  Page {self.current_index + 1}/{len(self.renderables)}", title="LRP-TSP", border_style="cyan")
                 layout["header"].update(header)
                 layout["body"].update(self.renderables[self.current_index])
+                if show_legend:
+                    legend_panel = Panel.fit(legend_text, border_style="cyan")
+                    footer = Columns([hotkeys_panel, legend_panel], equal=True)
+                else:
+                    footer = hotkeys_panel
                 layout["footer"].update(footer)
                 live.update(layout)
                 live.refresh()
@@ -452,12 +464,20 @@ class RouteViewer:
                 while True:
                     changed = False
                     # Terminal-Resize: Body neu bauen
-                    if abs(self.console.height - last_height) > 2:
+                    if abs(self.console.height - last_height) > 2 or (show_legend != (self.console.width > 90 and legend_text)):
                         self._build_renderables()
                         last_height = self.console.height
                         if self.current_index >= len(self.renderables):
                             self.current_index = len(self.renderables) - 1
                         changed = True
+                        # Footer ggf. neu setzen
+                        show_legend = self.console.width > 90 and legend_text
+                        if show_legend:
+                            legend_panel = Panel.fit(legend_text, border_style="cyan")
+                            footer = Columns([hotkeys_panel, legend_panel], equal=True)
+                        else:
+                            footer = hotkeys_panel
+                        layout["footer"].update(footer)
                     # Seitenwechsel: nur Body und Header aktualisieren
                     if self.current_index != last_index or changed:
                         header = Panel.fit(f"Route Display  •  Page {self.current_index + 1}/{len(self.renderables)}", title="LRP-TSP", border_style="cyan")
@@ -487,7 +507,6 @@ class RouteViewer:
                                         self.current_index = max(0, self.current_index - 1)
                                     elif seq in ("\x1b[C", "\x1bOC"):  # Right
                                         self.current_index = min(len(self.renderables) - 1, self.current_index + 1)
-                    # Leerlauf: kurz schlafen, kein Dauer-Refresh
                     time.sleep(0.01)
             finally:
                 if exit_cbreak:
@@ -1689,7 +1708,7 @@ def main():
                         if dx == 0:
                             line = "│"
                         elif dy == 0:
-                            line = "─"
+                                                       line = "─"
                         elif (dx > 0 and dy > 0) or (dx < 0 and dy < 0):
                             line = "╲"
                         else:
