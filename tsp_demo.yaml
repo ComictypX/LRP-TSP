@@ -22,56 +22,54 @@ settings:
 
   prompt: "$ "
   secondary_prompt: "> "
-  type_speed: 100ms
+  type_speed: 60ms
   timeout: 60s
 
 instructions:
   - !Interactive
     command: python3 tsp_solver.py
-    # Für ESC-[-C (Pfeil rechts) brauchen wir 0ms, damit es als 1 Taste erkannt wird
     type_speed: 0ms
     keys:
-      # 1) Enter
-      - 300ms
-      - ^J
-      # 2) Enter
-      - 300ms
-      - ^J
-      # 3) all
-      - 300ms
+      - ^J         # Enter
+      - 1200ms
+      - y
+      - 1200ms
+      - ^J    
+      - 1200ms      # Enter
       - a
+      - 60ms      
       - l
+      - 60ms
       - l
-      # ggf. braucht dein Tool hier noch Enter:
-      - 100ms
+      - 60ms
+      - 1200ms
+      - ^J         # Enter
+      - 1200ms
+      - ^[
+      - "["
+      - C
+      - 1200ms
+      - ^[
+      - "["
+      - C
+      - 1200ms      
+      - ^[
+      - "["
+      - C
+      - 1200ms      
+      - ^[
+      - "["
+      - C
+      - 1200ms
+      - ^[
+      - "["
+      - C
+      - 1200ms
       - ^J
-      # 4) fünfmal Pfeil rechts (ESC [ C)
-      - 300ms
-      - ^[
-      - "["
-      - C
-      - ^[
-      - "["
-      - C
-      - ^[
-      - "["
-      - C
-      - ^[
-      - "["
-      - C
-      - ^[
-      - "["
-      - C
-      # ggf. Auswahl bestätigen:
-      - 100ms
-      - ^J
-      # 5) q + Enter, zur Sicherheit
       - 300ms
       - q
       - 100ms
       - ^J
-      # Failsafe: wenn das Programm noch läuft → ^C beenden
       - 500ms
       - ^C
-
   - !Wait 600ms

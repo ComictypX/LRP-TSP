@@ -130,6 +130,11 @@ autocast tsp_demo.yaml demo.cast --width 100 --height 28 --title "TSP Solver Dem
 - This will run the interactive scenario in `tsp_demo.yaml` and record a cast to `demo.cast`.
 - The scenario feeds keystrokes and commands as if a user was interacting live.
 - You can play back the cast with [asciinema](https://asciinema.org/) or embed it in documentation.
+- to convert to a GIF, use [agg](github.com/asciinema/agg
+
+ ```bash
+agg demo.cast demo.gif --font-size 16 --theme dracula --speed 1.05
+```
 
 **Tip:** Adjust the scenario or window size as needed for your use case.
 
