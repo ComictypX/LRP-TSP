@@ -118,7 +118,22 @@ Edit `data/world_data.json` or run `extract_coords.py` with your own `.raw` file
 **License?**  
 MIT (see LICENSE). Data from Dune: Awakening — no guarantee for completeness.
 
-## Credits
+
+## Developer: Asciinema Demo Recording
+
+To create a reproducible terminal demo (for documentation, PRs, or cast-based screenshots), you can use [autocast](https://github.com/k9withabone/autocast) with the provided scenario file:
+
+```bash
+autocast tsp_demo.yaml demo.cast --width 100 --height 28 --title "TSP Solver Demo" --overwrite
+```
+
+- This will run the interactive scenario in `tsp_demo.yaml` and record a cast to `demo.cast`.
+- The scenario feeds keystrokes and commands as if a user was interacting live.
+- You can play back the cast with [asciinema](https://asciinema.org/) or embed it in documentation.
+
+**Tip:** Adjust the scenario or window size as needed for your use case.
+
+---
 
 - Dune: Awakening — Funcom.
 - OR-Tools — Google.
