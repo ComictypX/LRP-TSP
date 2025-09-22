@@ -13,19 +13,26 @@ from rich.live import Live
 from rich.layout import Layout
 from rich.align import Align
 
-# Plattformabhängiger Import für Hotkeys in Route-Anzeige
-import os
-if os.name == "nt":
+# Cross-platform hotkey wrapper (kbhit, getch, getwch)
+import sys
+if sys.platform == "win32":
     import msvcrt
+    def kbhit():
+        return msvcrt.kbhit()
+    def getch():
+        return msvcrt.getch().decode(errors="ignore")
+    def getwch():
+        return msvcrt.getwch()
 else:
-    class _DummyMsvcrt:
-        def getwch(self):
-            raise NotImplementedError("msvcrt.getwch is only available on Windows.")
-        def kbhit(self):
-            return False
-        def getch(self):
-            raise NotImplementedError("msvcrt.getch is only available on Windows.")
-    msvcrt = _DummyMsvcrt()
+    import select
+    import readchar
+    def kbhit():
+        dr, _, _ = select.select([sys.stdin], [], [], 0)
+        return bool(dr)
+    def getch():
+        return readchar.readchar()
+    def getwch():
+        return readchar.readchar()
 
 # Overrides for special house slugs on dune.gaming.tools
 SLUG_OVERRIDES = {
@@ -62,21 +69,14 @@ def show_welcome_screen(console: Console):
             layout = make_layout(0, 0, title, body_panel, footer)
             live.update(layout)
             # Plattformunabhängige Eingabe
-            if os.name == "nt":
-                while True:
-                    ch = msvcrt.getwch()
-                    if ch in ("\x00", "\xe0"):
-                        _ = msvcrt.getwch()
-                        continue
-                    if ch in ("\r", "\n"):
-                        break
-                    if ch.lower() == "q":
-                        live.stop()
-                        console.screen(False)
-                        sys.exit(0)
-            else:
-                s = input("Press Enter to continue, or q to quit: ").strip().lower()
-                if s == "q":
+            while True:
+                ch = getwch()
+                if ch in ("\x00", "\xe0") and sys.platform == "win32":
+                    _ = getwch()
+                    continue
+                if ch in ("\r", "\n"):
+                    break
+                if ch.lower() == "q":
                     live.stop()
                     console.screen(False)
                     sys.exit(0)
@@ -133,8 +133,8 @@ class Wizard:
         return Panel(t, border_style="green")
 
     def _ask(self, prompt_text: str) -> str:
-        # Plattformunabhängige Eingabe: Windows = Live/Hotkey, sonst klassisch
-        if os.name == "nt" and self.live:
+        # Plattformunabhängige Eingabe: Live/Hotkey (wenn self.live), sonst klassisch
+        if self.live:
             buf: list[str] = []
             idx = getattr(self, "_current_idx", 1)
             total = getattr(self, "_current_total", 1)
@@ -162,9 +162,9 @@ class Wizard:
             self.live.refresh()
 
             while True:
-                ch = msvcrt.getwch()
-                if ch in ("\x00", "\xe0"):
-                    _ = msvcrt.getwch()
+                ch = getwch()
+                if ch in ("\x00", "\xe0") and sys.platform == "win32":
+                    _ = getwch()
                     continue
                 if ch in ("\r", "\n"):
                     s = "".join(buf).strip()
@@ -373,11 +373,9 @@ class RouteViewer:
         def _run(live: Live):
             last_height = self.console.height
             while True:
-                # Prüfe auf signifikante Größenänderung (mehr als 2 Zeilen)
                 if abs(self.console.height - last_height) > 2:
                     self._build_renderables()
                     last_height = self.console.height
-                    # Reset index if out of bounds
                     if self.current_index >= len(self.renderables):
                         self.current_index = len(self.renderables) - 1
 
@@ -401,23 +399,25 @@ class RouteViewer:
 
                 live.update(layout)
 
-                # Warte auf Eingabe
-                if msvcrt.kbhit():
-                    key = msvcrt.getch()
-                    if key in (b'q', b'Q'):
+                if kbhit():
+                    key = getch()
+                    if key in ("q", "Q"):
                         break
-                    elif key == b'\xe0':  # Pfeiltaste Präfix
-                        key = msvcrt.getch()
-                        if key == b'K':  # Links
-                            self.current_index = max(0, self.current_index - 1)
-                        elif key == b'M':  # Rechts
-                            self.current_index = min(len(self.renderables) - 1, self.current_index + 1)
-                    elif key == b'\x00':  # Andere Spezialtasten
-                        key = msvcrt.getch()
-                        if key == b'K':  # Links (alternative)
-                            self.current_index = max(0, self.current_index - 1)
-                        elif key == b'M':  # Rechts (alternative)
-                            self.current_index = min(len(self.renderables) - 1, self.current_index + 1)
+                    # Windows: Pfeiltasten als '\xe0' + 'K'/'M', Unix: '\x1b[A', '\x1b[C', ...
+                    if sys.platform == "win32":
+                        if key == '\xe0':
+                            key2 = getch()
+                            if key2 == 'K':
+                                self.current_index = max(0, self.current_index - 1)
+                            elif key2 == 'M':
+                                self.current_index = min(len(self.renderables) - 1, self.current_index + 1)
+                    else:
+                        if key == '\x1b':
+                            seq = key + getch() + getch()
+                            if seq in ("\x1b[D", "\x1bOD"):  # Left
+                                self.current_index = max(0, self.current_index - 1)
+                            elif seq in ("\x1b[C", "\x1bOC"):  # Right
+                                self.current_index = min(len(self.renderables) - 1, self.current_index + 1)
 
         if within_screen:
             live = Live(console=self.console, refresh_per_second=4, transient=False)
