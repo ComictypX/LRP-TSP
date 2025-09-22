@@ -3,7 +3,6 @@ settings:
   height: 28
   title: TSP Solver Demo
 
-  # Custom-Bash mit eindeutigem Prompt wie im full-example.yaml
   shell:
     program: bash
     args:
@@ -13,43 +12,41 @@ settings:
     line_split: ' \'
     quit_command: exit
 
-  # Env wie im Beispiel: setzt PS1 und schaltet bracketed paste ab
   environment:
     - name: PROMPT_COMMAND
       value: "PS1=AUTOCAST_PROMPT; unset PROMPT_COMMAND; bind 'set enable-bracketed-paste off'"
+    - name: LANG
+      value: C.UTF-8
+    - name: LC_ALL
+      value: C.UTF-8
 
-  # Anzeige-Prompts im Cast (optisch)
   prompt: "$ "
   secondary_prompt: "> "
-
-  # Default Tippgeschwindigkeit (nur für !Command / Keys ohne Override)
   type_speed: 100ms
-
-  # Timeout bis zum Shell-Prompt
-  timeout: 30s
+  timeout: 60s
 
 instructions:
-  # Interaktive Sequenz:
-  # python3 tsp_solver.py
-  # Enter, Enter, "all", 5x Right, "q"
   - !Interactive
     command: python3 tsp_solver.py
-    # Für ESC-[-C Sequenzen kein Delay zwischen den Zeichen
-    type_speed: 80ms
+    # Für ESC-[-C (Pfeil rechts) brauchen wir 0ms, damit es als 1 Taste erkannt wird
+    type_speed: 0ms
     keys:
       # 1) Enter
-      - 600ms
-      - ^J          # Enter = LF (alternativ: ^M für CR)
-      # 2) Enter
-      - 600ms
+      - 300ms
       - ^J
-      # 3) "all"
-      - 600ms
+      # 2) Enter
+      - 300ms
+      - ^J
+      # 3) all
+      - 300ms
       - a
       - l
       - l
-      # 4) fünfmal Pfeil rechts: ESC [ C
-      - 600ms
+      # ggf. braucht dein Tool hier noch Enter:
+      - 100ms
+      - ^J
+      # 4) fünfmal Pfeil rechts (ESC [ C)
+      - 300ms
       - ^[
       - "["
       - C
@@ -65,10 +62,16 @@ instructions:
       - ^[
       - "["
       - C
-      # 5) 'q'
-      - 600ms
+      # ggf. Auswahl bestätigen:
+      - 100ms
+      - ^J
+      # 5) q + Enter, zur Sicherheit
+      - 300ms
       - q
-      # Ende: Programm muss selbst beenden → Bash-Prompt kehrt zurück
+      - 100ms
+      - ^J
+      # Failsafe: wenn das Programm noch läuft → ^C beenden
+      - 500ms
+      - ^C
 
-  # kleine optische Pause vorm Ende
-  - !Wait 1200ms
+  - !Wait 600ms
