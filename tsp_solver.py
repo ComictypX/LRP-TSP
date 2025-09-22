@@ -2,6 +2,7 @@ import itertools
 import os
 import re
 import sys
+
 from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
@@ -12,8 +13,19 @@ from rich.live import Live
 from rich.layout import Layout
 from rich.align import Align
 
-# Für Hotkeys in Route-Anzeige
-import msvcrt
+# Plattformabhängiger Import für Hotkeys in Route-Anzeige
+import os
+if os.name == "nt":
+    import msvcrt
+else:
+    class _DummyMsvcrt:
+        def getwch(self):
+            raise NotImplementedError("msvcrt.getwch is only available on Windows.")
+        def kbhit(self):
+            return False
+        def getch(self):
+            raise NotImplementedError("msvcrt.getch is only available on Windows.")
+    msvcrt = _DummyMsvcrt()
 
 # Overrides for special house slugs on dune.gaming.tools
 SLUG_OVERRIDES = {
@@ -49,15 +61,22 @@ def show_welcome_screen(console: Console):
         try:
             layout = make_layout(0, 0, title, body_panel, footer)
             live.update(layout)
-            # Wait for Enter or 'q'
-            while True:
-                ch = msvcrt.getwch()
-                if ch in ("\x00", "\xe0"):
-                    _ = msvcrt.getwch()
-                    continue
-                if ch in ("\r", "\n"):
-                    break
-                if ch.lower() == "q":
+            # Plattformunabhängige Eingabe
+            if os.name == "nt":
+                while True:
+                    ch = msvcrt.getwch()
+                    if ch in ("\x00", "\xe0"):
+                        _ = msvcrt.getwch()
+                        continue
+                    if ch in ("\r", "\n"):
+                        break
+                    if ch.lower() == "q":
+                        live.stop()
+                        console.screen(False)
+                        sys.exit(0)
+            else:
+                s = input("Press Enter to continue, or q to quit: ").strip().lower()
+                if s == "q":
                     live.stop()
                     console.screen(False)
                     sys.exit(0)
@@ -114,22 +133,18 @@ class Wizard:
         return Panel(t, border_style="green")
 
     def _ask(self, prompt_text: str) -> str:
-        # Custom input inside Live so header/body stay fixed
-        if self.live:
+        # Plattformunabhängige Eingabe: Windows = Live/Hotkey, sonst klassisch
+        if os.name == "nt" and self.live:
             buf: list[str] = []
-            # Ensure we have some context from last render
             idx = getattr(self, "_current_idx", 1)
             total = getattr(self, "_current_total", 1)
             title = getattr(self, "_current_title", "")
             body = getattr(self, "_current_body", Panel(""))
 
-            # Helper to build a compact footer: side-by-side prompt and input with fixed widths
             def build_footer(current_text: str):
                 term_w = max(60, self.console.width)
-                # Reserve some space for borders/padding; split ~60/40
                 left_w = int(term_w * 0.6)
                 right_w = term_w - left_w - 8
-                # Enforce sensible minima
                 if right_w < 18:
                     shift = 18 - right_w
                     left_w = max(24, left_w - shift)
@@ -143,40 +158,35 @@ class Wizard:
                 footer_grid.add_row(Align.left(hotkeys_panel))
                 return footer_grid
 
-            # Initial paint: prompt and input in separate boxes, plus hotkeys row (no legend here)
             self.live.update(make_layout(idx, total, title, body, build_footer("")))
             self.live.refresh()
 
             while True:
                 ch = msvcrt.getwch()
-                # Handle special key prefixes (arrows, etc.)
                 if ch in ("\x00", "\xe0"):
-                    # consume the next code and ignore
                     _ = msvcrt.getwch()
                     continue
                 if ch in ("\r", "\n"):
                     s = "".join(buf).strip()
                     break
-                if ch == "\x08":  # backspace
+                if ch == "\x08":
                     if buf:
                         buf.pop()
-                elif ch == "\x1b":  # ESC -> ignore (use 'q' to cancel)
+                elif ch == "\x1b":
                     pass
                 else:
-                    # Append printable characters only
                     if ch.isprintable():
                         buf.append(ch)
-                # Update footer with current buffer in right-hand box
                 self.live.update(make_layout(idx, total, title, body, build_footer(''.join(buf))))
                 self.live.refresh()
         else:
-            s = self.console.input(f"\n{prompt_text}\n> ").strip()
+            # Fallback: klassisches Prompt
+            s = input(f"{prompt_text}\n> ").strip()
         if s.lower() == "q":
-            # Exit alternate screen and terminate program immediately
             if self.live:
                 self.live.stop()
-            self.console.screen(False)  # Explicitly exit alternate screen
-            sys.exit(0)  # Force exit
+            self.console.screen(False)
+            sys.exit(0)
         return s
 
     def _render(self, idx: int, total: int, title: str, body, footer: str = "Enter = continue, q = cancel"):
