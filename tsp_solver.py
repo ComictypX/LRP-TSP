@@ -415,43 +415,57 @@ class RouteViewer:
         self.renderables.append(Panel(self.summary_table, title="Summary", border_style="green", expand=False))
 
     def display(self, within_screen: bool = False):
-        """Zeige die Route mit Navigation."""
+        """Zeige die Route mit Navigation (flackerfrei, effizient)."""
+        import time
         self._build_renderables()
         if not self.renderables:
             return
+
         def _run(live: Live):
             exit_cbreak = (sys.platform != "win32")
             if exit_cbreak:
                 _enter_cbreak()
             try:
                 last_height = self.console.height
+                last_index = -1
+                # Statische Panels nur einmal bauen
+                legend_panel = Panel(
+                    "[dim]Legend: [turquoise2]Hagga Basin[/], [gold3]Deep Desert[/], [green3]Arrakeen[/], [dark_red]Harko Village[/][/dim]",
+                    border_style="cyan"
+                ) if self.use_colors else Panel("", border_style="cyan")
+                hotkeys_panel = Panel("←/→ Navigate, q = Quit", border_style="cyan")
+                footer = Columns([hotkeys_panel, legend_panel], equal=True)
+                layout = Layout()
+                layout.split(
+                    Layout(name="header", size=3),
+                    Layout(name="body"),
+                    Layout(name="footer", size=5),
+                )
+                # Initial Header/Body/Footer setzen
+                header = Panel.fit(f"Route Display  •  Page {self.current_index + 1}/{len(self.renderables)}", title="LRP-TSP", border_style="cyan")
+                layout["header"].update(header)
+                layout["body"].update(self.renderables[self.current_index])
+                layout["footer"].update(footer)
+                live.update(layout)
+                live.refresh()
+
                 while True:
+                    changed = False
+                    # Terminal-Resize: Body neu bauen
                     if abs(self.console.height - last_height) > 2:
                         self._build_renderables()
                         last_height = self.console.height
                         if self.current_index >= len(self.renderables):
                             self.current_index = len(self.renderables) - 1
-
-                    legend_panel = Panel(
-                        "[dim]Legend: [turquoise2]Hagga Basin[/], [gold3]Deep Desert[/], [green3]Arrakeen[/], [dark_red]Harko Village[/][/dim]",
-                        border_style="cyan"
-                    ) if self.use_colors else Panel("", border_style="cyan")
-                    hotkeys_panel = Panel("←/→ Navigate, q = Quit", border_style="cyan")
-                    footer = Columns([hotkeys_panel, legend_panel], equal=True)
-
-                    layout = Layout()
-                    layout.split(
-                        Layout(name="header", size=3),
-                        Layout(name="body"),
-                        Layout(name="footer", size=5),
-                    )
-                    header = Panel.fit(f"Route Display  •  Page {self.current_index + 1}/{len(self.renderables)}", title="LRP-TSP", border_style="cyan")
-                    layout["header"].update(header)
-                    layout["body"].update(self.renderables[self.current_index])
-                    layout["footer"].update(footer)
-
-                    live.update(layout)
-
+                        changed = True
+                    # Seitenwechsel: nur Body und Header aktualisieren
+                    if self.current_index != last_index or changed:
+                        header = Panel.fit(f"Route Display  •  Page {self.current_index + 1}/{len(self.renderables)}", title="LRP-TSP", border_style="cyan")
+                        layout["header"].update(header)
+                        layout["body"].update(self.renderables[self.current_index])
+                        live.refresh()
+                        last_index = self.current_index
+                    # Eingabe prüfen
                     if kbhit():
                         key = getch()
                         if key in ("q", "Q", b"q", b"Q"):
@@ -473,12 +487,14 @@ class RouteViewer:
                                         self.current_index = max(0, self.current_index - 1)
                                     elif seq in ("\x1b[C", "\x1bOC"):  # Right
                                         self.current_index = min(len(self.renderables) - 1, self.current_index + 1)
+                    # Leerlauf: kurz schlafen, kein Dauer-Refresh
+                    time.sleep(0.01)
             finally:
                 if exit_cbreak:
                     _leave_cbreak()
 
         if within_screen:
-            live = Live(console=self.console, refresh_per_second=4, transient=False)
+            live = Live(console=self.console, refresh_per_second=8, auto_refresh=False, transient=False)
             live.start()
             try:
                 _run(live)
@@ -486,7 +502,7 @@ class RouteViewer:
                 live.stop()
         else:
             with self.console.screen():
-                live = Live(console=self.console, refresh_per_second=4, transient=False)
+                live = Live(console=self.console, refresh_per_second=8, auto_refresh=False, transient=False)
                 live.start()
                 try:
                     _run(live)
